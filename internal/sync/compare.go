@@ -3,7 +3,7 @@ package sync
 import (
 	"sort"
 
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 // Compare performs three-way comparison between local, remote, and archive states.

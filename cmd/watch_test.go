@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/selfbase-hq/s2-cli/internal/client"
-	s2sync "github.com/selfbase-hq/s2-cli/internal/sync"
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/client"
+	s2sync "github.com/selfbase-dev/s2-cli/internal/sync"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 // =============================================================================
@@ -521,7 +521,7 @@ func TestFsnotify_FileCreate_Detected(t *testing.T) {
 	addWatchDirs(watcher, dir, exclude)
 
 	localChanged := make(chan struct{}, 1)
-	go filterFsEvents(watcher, dir, exclude, localChanged)
+	go filterFsEventsWithAutoWatch(watcher, dir, exclude, localChanged)
 
 	// Create a new file
 	os.WriteFile(filepath.Join(dir, "new.txt"), []byte("hello"), 0644)
@@ -549,7 +549,7 @@ func TestFsnotify_FileModify_Detected(t *testing.T) {
 	addWatchDirs(watcher, dir, exclude)
 
 	localChanged := make(chan struct{}, 1)
-	go filterFsEvents(watcher, dir, exclude, localChanged)
+	go filterFsEventsWithAutoWatch(watcher, dir, exclude, localChanged)
 
 	// Modify file
 	time.Sleep(50 * time.Millisecond) // let watcher settle
@@ -577,7 +577,7 @@ func TestFsnotify_S2Dir_Ignored(t *testing.T) {
 	addWatchDirs(watcher, dir, exclude)
 
 	localChanged := make(chan struct{}, 1)
-	go filterFsEvents(watcher, dir, exclude, localChanged)
+	go filterFsEventsWithAutoWatch(watcher, dir, exclude, localChanged)
 
 	// Write to .s2 dir (should be ignored)
 	os.WriteFile(filepath.Join(dir, ".s2", "state.json"), []byte("{}"), 0644)
@@ -765,7 +765,7 @@ func TestFilterFsEvents_RapidCreateModifyDelete(t *testing.T) {
 	addWatchDirs(watcher, dir, exclude)
 
 	localChanged := make(chan struct{}, 100)
-	go filterFsEvents(watcher, dir, exclude, localChanged)
+	go filterFsEventsWithAutoWatch(watcher, dir, exclude, localChanged)
 
 	// Rapidly create, modify, and delete 50 files
 	for i := 0; i < 50; i++ {

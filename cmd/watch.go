@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/selfbase-hq/s2-cli/internal/auth"
-	"github.com/selfbase-hq/s2-cli/internal/client"
-	s2sync "github.com/selfbase-hq/s2-cli/internal/sync"
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/auth"
+	"github.com/selfbase-dev/s2-cli/internal/client"
+	s2sync "github.com/selfbase-dev/s2-cli/internal/sync"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -103,37 +103,8 @@ func watchLoop(cfg WatchLoopConfig) {
 	}
 }
 
-// filterFsEvents reads fsnotify events, filters them, and signals localChanged.
-// This is the basic version without auto-watch of new directories.
-func filterFsEvents(watcher *fsnotify.Watcher, localDir string, exclude func(string) bool, localChanged chan<- struct{}) {
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			rel, err := filepath.Rel(localDir, event.Name)
-			if err != nil {
-				continue
-			}
-			rel = filepath.ToSlash(rel)
-			if !shouldProcessEvent(rel, exclude) {
-				continue
-			}
-			select {
-			case localChanged <- struct{}{}:
-			default:
-			}
-		case _, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-		}
-	}
-}
-
-// filterFsEventsWithAutoWatch is like filterFsEvents but also adds newly
-// created directories to the watcher.
+// filterFsEventsWithAutoWatch reads fsnotify events, filters them, signals
+// localChanged, and auto-watches newly created directories.
 func filterFsEventsWithAutoWatch(watcher *fsnotify.Watcher, localDir string, exclude func(string) bool, localChanged chan<- struct{}) {
 	for {
 		select {

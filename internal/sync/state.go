@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 // State represents the .s2/state.json file.

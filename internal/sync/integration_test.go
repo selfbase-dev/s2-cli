@@ -14,8 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/selfbase-hq/s2-cli/internal/client"
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/client"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 // ---------------------------------------------------------------------------

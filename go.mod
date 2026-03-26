@@ -1,8 +1,9 @@
-module github.com/selfbase-hq/s2-cli
+module github.com/selfbase-dev/s2-cli
 
 go 1.26.1
 
 require (
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
@@ -11,7 +12,6 @@ require (
 
 require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect

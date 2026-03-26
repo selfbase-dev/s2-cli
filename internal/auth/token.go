@@ -26,10 +26,5 @@ func LoadToken() (string, error) {
 		return t, nil
 	}
 
-	// 3. Config file
-	if t := viper.GetString("token"); t != "" {
-		return t, nil
-	}
-
 	return "", fmt.Errorf("no token found. Run 's2 login' or set S2_TOKEN")
 }

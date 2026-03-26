@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 func TestLoadStateMissing(t *testing.T) {

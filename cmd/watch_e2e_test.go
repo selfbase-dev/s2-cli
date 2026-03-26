@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/selfbase-hq/s2-cli/internal/client"
-	s2sync "github.com/selfbase-hq/s2-cli/internal/sync"
+	"github.com/selfbase-dev/s2-cli/internal/client"
+	s2sync "github.com/selfbase-dev/s2-cli/internal/sync"
 )
 
 // E2E tests require:

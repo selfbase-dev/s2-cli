@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 // Walk recursively scans the local directory and returns a map of relative path → LocalFile.
@@ -55,16 +55,6 @@ func Walk(root string, archive map[string]types.FileState, exclude func(string) 
 		// Skip directories (we only track files)
 		if info.IsDir() {
 			return nil
-		}
-
-		// Check if we can reuse archive hash (modtime+size optimization)
-		if archive != nil {
-			if a, ok := archive[rel]; ok {
-				if info.Size() == a.Size && info.ModTime().Unix() == a.Size {
-					// This optimization is intentionally conservative;
-					// size field double-duty is wrong, we skip it for now
-				}
-			}
 		}
 
 		hash, err := hashFile(path)

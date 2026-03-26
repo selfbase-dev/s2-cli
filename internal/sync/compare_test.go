@@ -3,7 +3,7 @@ package sync
 import (
 	"testing"
 
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 )
 
 func TestCompare(t *testing.T) {

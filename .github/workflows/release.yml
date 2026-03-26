@@ -24,26 +24,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to R2
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          ENDPOINT="https://${CF_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          count=0
-          for file in dist/s2_*.tar.gz dist/s2_*.zip; do
-            [ -f "$file" ] || continue
-            name=$(basename "$file")
-            echo "Uploading $name..."
-            aws s3 cp "$file" "s3://s2-cli-releases/cli/v${VERSION}/${name}" \
-              --endpoint-url "$ENDPOINT"
-            count=$((count + 1))
-          done
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No files matched for upload"
-            exit 1
-          fi
-          echo "Uploaded $count files"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

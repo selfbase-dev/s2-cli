@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/selfbase-hq/s2-cli/internal/auth"
-	"github.com/selfbase-hq/s2-cli/internal/client"
-	s2sync "github.com/selfbase-hq/s2-cli/internal/sync"
-	"github.com/selfbase-hq/s2-cli/internal/types"
+	"github.com/selfbase-dev/s2-cli/internal/auth"
+	"github.com/selfbase-dev/s2-cli/internal/client"
+	s2sync "github.com/selfbase-dev/s2-cli/internal/sync"
+	"github.com/selfbase-dev/s2-cli/internal/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
