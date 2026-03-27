@@ -198,8 +198,19 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	localChanged := make(chan struct{}, 1)
 	go filterFsEventsWithAutoWatch(watcher, localDir, exclude, localChanged)
 
+	// Fetch our own token_id to filter self-changes during polling
+	ownTokenID, err := c.TokenID()
+	if err != nil {
+		// Non-fatal: fall back to no filtering
+		ownTokenID = ""
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Watching %s ↔ %s (poll every %s, Ctrl+C to stop)\n",
 		localDir, remotePrefix, watchPollInterval)
+
+	// skipCursor tracks the highest seq of self-only poll pages so that
+	// subsequent polls skip past them. Reset when doSync advances state.Cursor.
+	var skipCursor int64
 
 	// Build poll function
 	pollFn := func() (bool, bool, error) {
@@ -207,14 +218,35 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return false, false, err
 		}
-		changes, err := c.PollChanges(state.Cursor, 1)
+		cursor := state.Cursor
+		if skipCursor > cursor {
+			cursor = skipCursor
+		}
+		changes, err := c.PollChanges(cursor, 50)
 		if err == client.ErrCursorInvalid {
+			skipCursor = 0
 			return false, true, nil
 		}
 		if err != nil {
 			return false, false, err
 		}
-		return len(changes) > 0, false, nil
+		if ownTokenID == "" {
+			return len(changes) > 0, false, nil
+		}
+		maxSelfSeq := int64(0)
+		for _, ch := range changes {
+			if ch.TokenID != ownTokenID {
+				return true, false, nil
+			}
+			if ch.Seq > maxSelfSeq {
+				maxSelfSeq = ch.Seq
+			}
+		}
+		// All changes were self-generated; advance skipCursor past them
+		if maxSelfSeq > 0 {
+			skipCursor = maxSelfSeq
+		}
+		return false, false, nil
 	}
 
 	// Build sync function
