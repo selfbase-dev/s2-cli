@@ -13,13 +13,19 @@ Download a binary from [GitHub Releases](https://github.com/selfbase-dev/s2-cli/
 s2 login
 
 # One-shot bidirectional sync
-s2 sync ./local-dir my-prefix/
+s2 sync ./local-dir
 
 # Watch mode (continuous sync)
-s2 watch ./local-dir my-prefix/
+s2 watch ./local-dir
 ```
 
+The sync root is determined by the token's `base_path`. To sync a different scope, issue a new token.
+
 Token can also be set via `S2_TOKEN` env var.
+
+### Ignore patterns
+
+On first run, `s2 sync` / `s2 watch` creates a `.s2ignore` file in the local directory with default OS/editor patterns (`.DS_Store`, `Thumbs.db`, `*.swp`, etc.). Edit this file to customize what gets excluded.
 
 ## Test
 
