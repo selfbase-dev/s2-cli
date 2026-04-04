@@ -19,7 +19,7 @@ type State struct {
 	Files      map[string]types.FileState `json:"files"`
 }
 
-const currentStateVersion = 3
+const currentStateVersion = 1
 
 // StateDir returns the .s2 directory path within the sync root.
 func StateDir(syncRoot string) string {
@@ -33,7 +33,6 @@ func StatePath(syncRoot string) string {
 
 // LoadState reads state.json from the sync root.
 // Returns an empty state if the file doesn't exist or is corrupt.
-// If the state version is old (v1), resets to empty (cursor incompatible).
 func LoadState(syncRoot string) (*State, error) {
 	path := StatePath(syncRoot)
 	data, err := os.ReadFile(path)
@@ -47,12 +46,6 @@ func LoadState(syncRoot string) (*State, error) {
 	var state State
 	if err := json.Unmarshal(data, &state); err != nil {
 		// Corrupt state: treat as first sync
-		return newEmptyState(), nil
-	}
-
-	// v1/v2 → v3 migration: remote_prefix removed (token base_path is used instead).
-	// Reset state on any older version.
-	if state.Version < currentStateVersion {
 		return newEmptyState(), nil
 	}
 
