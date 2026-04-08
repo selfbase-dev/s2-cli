@@ -19,7 +19,7 @@ s2 sync ./local-dir
 s2 watch ./local-dir
 ```
 
-The sync root is determined by the token's `base_path`. To sync a different scope, issue a new token.
+The sync root is determined by the token's `base_path` — root or scoped, any token works the same way. To sync a different scope, issue a new token.
 
 Token can also be set via `S2_TOKEN` env var.
 
@@ -36,7 +36,7 @@ S2_ENDPOINT=http://localhost:8888 S2_TOKEN=s2_xxx go test -tags e2e ./internal/s
 ```
 
 **E2E requirements:**
-- `S2_TOKEN`: token with `can_delegate=true` and full read/write access
+- `S2_TOKEN`: token with `can_delegate=true` and full read/write access (root or scoped — any scope works)
 
 ## Release
 
