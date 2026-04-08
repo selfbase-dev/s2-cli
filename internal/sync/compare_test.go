@@ -258,6 +258,32 @@ func TestCompareIncremental(t *testing.T) {
 			changes: []types.ChangeEntry{{Action: "delete", PathBefore: "gone.txt"}},
 			want:    map[string]types.SyncAction{"gone.txt": types.DeleteLocal},
 		},
+		// Server paths may include leading "/" — normalization must strip it
+		// so paths match local/archive keys (which never have leading "/").
+		{
+			name:    "leading slash on remote put path is normalized",
+			local:   map[string]types.LocalFile{"a.txt": {Hash: "h1"}},
+			archive: map[string]types.FileState{"a.txt": {LocalHash: "h1"}},
+			changes: []types.ChangeEntry{{Action: "put", PathAfter: "/a.txt"}},
+			want:    map[string]types.SyncAction{"a.txt": types.Pull},
+		},
+		{
+			name:    "leading slash on remote delete path is normalized",
+			local:   map[string]types.LocalFile{"a.txt": {Hash: "h2"}},
+			archive: map[string]types.FileState{"a.txt": {LocalHash: "h1"}},
+			changes: []types.ChangeEntry{{Action: "delete", PathBefore: "/a.txt"}},
+			want:    map[string]types.SyncAction{"a.txt": types.Conflict},
+		},
+		{
+			name:    "leading slash on remote move paths is normalized",
+			local:   map[string]types.LocalFile{"old.txt": {Hash: "h1"}},
+			archive: map[string]types.FileState{"old.txt": {LocalHash: "h1"}},
+			changes: []types.ChangeEntry{{Action: "move", PathBefore: "/old.txt", PathAfter: "/new.txt"}},
+			want: map[string]types.SyncAction{
+				"old.txt": types.DeleteLocal,
+				"new.txt": types.Pull,
+			},
+		},
 	}
 
 	for _, tt := range tests {

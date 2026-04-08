@@ -68,16 +68,30 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
 	endpoint := os.Getenv("S2_ENDPOINT")
-	rootToken := os.Getenv("S2_TOKEN")
-	if endpoint == "" || rootToken == "" {
+	token := os.Getenv("S2_TOKEN")
+	if endpoint == "" || token == "" {
 		t.Fatal("S2_ENDPOINT and S2_TOKEN must be set")
+	}
+
+	// Resolve the parent token's base_path so child paths are always within scope.
+	// S2_TOKEN can be root or scoped — tests must not assume either.
+	rc := client.New(endpoint, token)
+	me, err := rc.Me()
+	if err != nil {
+		t.Fatalf("Me: %v", err)
+	}
+	parentBasePath := me.BasePath
+	if parentBasePath == "" {
+		parentBasePath = "/"
+	}
+	if !strings.HasSuffix(parentBasePath, "/") {
+		parentBasePath += "/"
 	}
 
 	// Create a child token with a unique base_path for test isolation.
 	// Each test gets its own virtual root so tests don't interfere with each other.
-	rc := client.New(endpoint, rootToken)
-	uniqueBasePath := "/e2e-test/" + time.Now().Format("20060102-150405") + "-" + t.Name() + "/"
-	childResp, err := rc.CreateToken("e2e-"+t.Name(), uniqueBasePath, false, nil)
+	uniqueBasePath := parentBasePath + "e2e-test/" + time.Now().Format("20060102-150405") + "-" + t.Name() + "/"
+	childResp, err := rc.CreateToken("e2e-"+t.Name(), uniqueBasePath, true, []types.AccessPath{{Path: "/", CanRead: true, CanWrite: true}})
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
 	}
@@ -92,42 +106,6 @@ func newTestEnv(t *testing.T) *testEnv {
 	return &testEnv{t: t, client: c, localDir: localDir, basePath: uniqueBasePath}
 }
 
-func newTestEnvWithToken(t *testing.T, token string) *testEnv {
-	t.Helper()
-
-	endpoint := os.Getenv("S2_ENDPOINT")
-	if endpoint == "" || token == "" {
-		t.Fatal("S2_ENDPOINT and S2_TOKEN must be set")
-	}
-
-	c := client.New(endpoint, token)
-
-	// Verify token and get base_path
-	me, err := c.Me()
-	if err != nil {
-		t.Fatalf("failed to validate token: %v", err)
-	}
-	basePath := me.BasePath
-	if basePath == "" {
-		basePath = "/"
-	}
-
-	// Create a child token with a unique base_path for test isolation.
-	uniqueBasePath := basePath + "e2e-test/" + time.Now().Format("20060102-150405") + "-" + t.Name() + "/"
-	childResp, err := c.CreateToken("e2e-"+t.Name(), uniqueBasePath, false, nil)
-	if err != nil {
-		t.Fatalf("CreateToken: %v", err)
-	}
-
-	childClient := client.New(endpoint, childResp.RawToken)
-	localDir := t.TempDir()
-
-	t.Cleanup(func() {
-		cleanRemote(childClient, "")
-	})
-
-	return &testEnv{t: t, client: childClient, localDir: localDir, basePath: uniqueBasePath}
-}
 
 func cleanRemote(c *client.Client, prefix string) {
 	files, err := c.ListAllRecursive(prefix)
@@ -588,7 +566,7 @@ func TestS18_Incremental_OtherDevicePush(t *testing.T) {
 
 	// Create a child token with the same base_path to simulate a second device.
 	// (SELF-240: create returns raw_token directly)
-	childResp, err := env.client.CreateToken("s18-device2", env.basePath, false, nil)
+	childResp, err := env.client.CreateToken("s18-device2", env.basePath, false, []types.AccessPath{{Path: "/", CanRead: true, CanWrite: true}})
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
 	}
@@ -774,184 +752,71 @@ func TestS32_PullDuringLocalEdit(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// Scoped token tests (base_path != "/")
-//
-// These run the same core sync scenarios using a non-root token
-// (S2_SCOPED_TOKEN env var, base_path="/e2e-scope/").
-// Skipped if S2_SCOPED_TOKEN is not set.
-// =============================================================================
-
-func scopedTestEnv(t *testing.T) *testEnv {
-	t.Helper()
-	token := os.Getenv("S2_SCOPED_TOKEN")
-	if token == "" {
-		t.Skip("S2_SCOPED_TOKEN not set — skipping scoped token tests")
-	}
-	env := newTestEnvWithToken(t, token)
-	if env.basePath == "/" {
-		t.Fatalf("S2_SCOPED_TOKEN has base_path='/', expected a non-root scoped token")
-	}
-	return env
-}
-
-// TestScoped_CoreScenarios runs the same sync scenarios as the root token tests
-// but with a non-root base_path token. Verifies that prefix stripping, path
-// conversion, and all sync operations work correctly with scoped tokens.
-func TestScoped_CoreScenarios(t *testing.T) {
-	t.Run("S01_InitialSync_LocalOnly", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.writeLocal("hello.txt", "hello world")
-		result := env.sync()
-		if result.Pushed != 1 {
-			t.Errorf("pushed = %d, want 1", result.Pushed)
-		}
-		if !env.remoteExists("hello.txt") {
-			t.Error("remote hello.txt should exist")
-		}
-	})
-
-	t.Run("S02_InitialSync_RemoteOnly", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.putRemote("remote.txt", "remote content")
-		result := env.sync()
-		if result.Pulled != 1 {
-			t.Errorf("pulled = %d, want 1", result.Pulled)
-		}
-		if got := env.readLocal("remote.txt"); got != "remote content" {
-			t.Errorf("local = %q", got)
-		}
-	})
-
-	t.Run("S04_InitialSync_BothDifferent", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.writeLocal("diff.txt", "local version")
-		env.putRemote("diff.txt", "remote version")
-		env.sync()
-		if got := env.readLocal("diff.txt"); got != "local version" {
-			t.Errorf("local = %q, want 'local version'", got)
-		}
-		if _, found := env.localHasConflict("diff.txt"); !found {
-			t.Error("should create .sync-conflict-* file")
-		}
-		if got := env.readRemote("diff.txt"); got != "local version" {
-			t.Errorf("remote = %q, want 'local version'", got)
-		}
-	})
-
-	t.Run("S07_Incremental_LocalAdd", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.writeLocal("existing.txt", "existing")
-		env.sync()
-		env.writeLocal("new.txt", "new file")
-		result := env.sync()
-		if result.Pushed < 1 {
-			t.Errorf("pushed = %d, want >= 1", result.Pushed)
-		}
-		if !env.remoteExists("new.txt") {
-			t.Error("remote new.txt should exist")
-		}
-	})
-
-	t.Run("S10_Incremental_RemoteAdd", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.skipSelfFilter = true
-		env.writeLocal("existing.txt", "existing")
-		env.sync()
-		env.putRemote("remote_new.txt", "from remote")
-		result := env.sync()
-		if result.Pulled < 1 {
-			t.Errorf("pulled = %d", result.Pulled)
-		}
-		if got := env.readLocal("remote_new.txt"); got != "from remote" {
-			t.Errorf("local = %q", got)
-		}
-	})
-
-	t.Run("S13_Incremental_BothEdit", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.skipSelfFilter = true
-		env.writeLocal("file.txt", "original")
-		env.sync()
-		env.writeLocal("file.txt", "local edit")
-		env.putRemote("file.txt", "remote edit")
-		env.sync()
-		if got := env.readLocal("file.txt"); got != "local edit" {
-			t.Errorf("local = %q, want 'local edit'", got)
-		}
-		if _, found := env.localHasConflict("file.txt"); !found {
-			t.Error("should create conflict file")
-		}
-	})
-
-	t.Run("S16_RemoteMove", func(t *testing.T) {
-		env := scopedTestEnv(t)
-		env.skipSelfFilter = true
-		env.writeLocal("old.txt", "content")
-		env.sync()
-		env.moveRemote("old.txt", "new.txt")
-		env.sync()
-		if env.localExists("old.txt") {
-			t.Error("old.txt should not exist locally")
-		}
-		if !env.localExists("new.txt") {
-			t.Error("new.txt should exist locally")
-		}
-	})
-}
 
 // --- Cross-token sync tests ---
 
-// absPath returns the absolute path for a file in this env's scope,
-// suitable for use by a root token (combines base_path with relPath).
-func (e *testEnv) absPath(relPath string) string {
-	return strings.TrimPrefix(e.basePath, "/") + relPath
+// parentRelPath returns a path relative to the parent token's scope,
+// so the parent can access this env's files.
+func (e *testEnv) parentRelPath(parentBasePath, relPath string) string {
+	suffix := strings.TrimPrefix(e.basePath, parentBasePath)
+	return suffix + relPath
 }
 
-// rootClient creates a client using the root token (S2_TOKEN env var).
-func rootClient(t *testing.T) *client.Client {
+// parentClient creates a client using S2_TOKEN (the parent token).
+func parentClient(t *testing.T) (*client.Client, string) {
 	t.Helper()
-	return client.New(os.Getenv("S2_ENDPOINT"), os.Getenv("S2_TOKEN"))
+	c := client.New(os.Getenv("S2_ENDPOINT"), os.Getenv("S2_TOKEN"))
+	me, err := c.Me()
+	if err != nil {
+		t.Fatalf("Me: %v", err)
+	}
+	basePath := me.BasePath
+	if basePath == "" {
+		basePath = "/"
+	}
+	if !strings.HasSuffix(basePath, "/") {
+		basePath += "/"
+	}
+	return c, basePath
 }
 
-// TestScoped_CrossToken tests that changes are visible across tokens with
-// different scopes (root ↔ scoped).
+// TestScoped_CrossToken tests that changes uploaded via one token are visible
+// to a parent token with broader scope (child → parent and parent → child).
 func TestScoped_CrossToken(t *testing.T) {
-	t.Run("RootPushScopedPulls", func(t *testing.T) {
-		scopedEnv := scopedTestEnv(t)
-		rc := rootClient(t)
+	t.Run("ParentPushChildPulls", func(t *testing.T) {
+		childEnv := newTestEnv(t)
+		pc, parentBase := parentClient(t)
 
-		// Root token uploads to the scoped env's absolute path
-		if _, err := rc.Upload(scopedEnv.absPath("shared.txt"), strings.NewReader("from root"), "", -1); err != nil {
-			t.Fatalf("root upload: %v", err)
+		// Parent token uploads to the child's path (relative to parent scope)
+		if _, err := pc.Upload(childEnv.parentRelPath(parentBase, "shared.txt"), strings.NewReader("from parent"), "", -1); err != nil {
+			t.Fatalf("parent upload: %v", err)
 		}
 
-		result := scopedEnv.sync()
+		result := childEnv.sync()
 		if result.Pulled < 1 {
 			t.Errorf("pulled = %d, want >= 1", result.Pulled)
 		}
-		if got := scopedEnv.readLocal("shared.txt"); got != "from root" {
-			t.Errorf("local = %q, want 'from root'", got)
+		if got := childEnv.readLocal("shared.txt"); got != "from parent" {
+			t.Errorf("local = %q, want 'from parent'", got)
 		}
 	})
 
-	t.Run("ScopedPushRootPulls", func(t *testing.T) {
-		scopedEnv := scopedTestEnv(t)
-		scopedEnv.skipSelfFilter = true
+	t.Run("ChildPushParentPulls", func(t *testing.T) {
+		childEnv := newTestEnv(t)
+		childEnv.skipSelfFilter = true
 
-		scopedEnv.writeLocal("shared.txt", "from scoped")
-		scopedEnv.sync()
+		childEnv.writeLocal("shared.txt", "from child")
+		childEnv.sync()
 
-		rc := rootClient(t)
-		absPath := scopedEnv.absPath("shared.txt")
-		dl, err := rc.Download(absPath)
+		pc, parentBase := parentClient(t)
+		dl, err := pc.Download(childEnv.parentRelPath(parentBase, "shared.txt"))
 		if err != nil {
-			t.Fatalf("root download: %v", err)
+			t.Fatalf("parent download: %v", err)
 		}
 		defer dl.Body.Close()
 		data, _ := io.ReadAll(dl.Body)
-		if got := string(data); got != "from scoped" {
-			t.Errorf("root sees %q, want 'from scoped'", got)
+		if got := string(data); got != "from child" {
+			t.Errorf("parent sees %q, want 'from child'", got)
 		}
 	})
 }
@@ -965,14 +830,14 @@ func TestScoped_CrossToken(t *testing.T) {
 // using root token delegation. Then move the outer directory.
 // isAncestorOfScope fires because "s22-outer-{ts}" is an ancestor of "s22-outer-{ts}/inner".
 func TestScoped_S22_ResyncRequired_AncestorMove(t *testing.T) {
-	_ = scopedTestEnv(t) // ensure S2_SCOPED_TOKEN is set (validates test environment)
+	pc, parentBase := parentClient(t)
 
-	rc := rootClient(t)
-
-	// Create nested token: base_path="/s22-outer-{ts}/inner/"
+	// Create nested token under the parent's scope:
+	// base_path = "{parentBase}s22-outer-{ts}/inner/"
 	outerDir := "s22-outer-" + time.Now().Format("150405")
 	innerPath := outerDir + "/inner/"
-	childResp, err := rc.CreateToken("s22-nested", "/"+innerPath, false, []types.AccessPath{
+	nestedBasePath := parentBase + innerPath
+	childResp, err := pc.CreateToken("s22-nested", nestedBasePath, false, []types.AccessPath{
 		{Path: "/", CanRead: true, CanWrite: true},
 	})
 	if err != nil {
@@ -981,12 +846,12 @@ func TestScoped_S22_ResyncRequired_AncestorMove(t *testing.T) {
 	nestedClient := client.New(os.Getenv("S2_ENDPOINT"), childResp.RawToken)
 
 	// Seed a file so the directory exists on the server
-	if _, err := rc.Upload(innerPath+"seed.txt", strings.NewReader("seed"), "", -1); err != nil {
+	if _, err := pc.Upload(innerPath+"seed.txt", strings.NewReader("seed"), "", -1); err != nil {
 		t.Fatalf("seed upload: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = rc.Delete(outerDir + "-moved/inner/seed.txt")
-		_, _ = rc.Delete(innerPath + "seed.txt")
+		_, _ = pc.Delete(outerDir + "-moved/inner/seed.txt")
+		_, _ = pc.Delete(innerPath + "seed.txt")
 	})
 
 	// Get cursor for nested token (after seed)
@@ -995,9 +860,9 @@ func TestScoped_S22_ResyncRequired_AncestorMove(t *testing.T) {
 		t.Fatalf("LatestCursor: %v", err)
 	}
 
-	// Root moves the outer directory → ancestor of "/s22-outer-{ts}/inner/"
+	// Parent moves the outer directory → ancestor of nested token's scope
 	movedDir := outerDir + "-moved"
-	if err := rc.Move(outerDir+"/", movedDir+"/", false); err != nil {
+	if err := pc.Move(outerDir+"/", movedDir+"/", false); err != nil {
 		t.Skipf("move not supported: %v", err)
 	}
 

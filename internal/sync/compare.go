@@ -2,6 +2,7 @@ package sync
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/selfbase-dev/s2-cli/internal/types"
 )
@@ -66,6 +67,10 @@ func CompareIncremental(
 	// Build set of remotely changed paths and their actions.
 	// Skip directory events (mkdir) — we only sync files; directories are
 	// created implicitly when pulling files into them.
+	// normPath strips the leading "/" that the server's absolutePathToClient adds
+	// so change paths match the slash-free keys used by Walk and ListAllRecursive.
+	normPath := func(p string) string { return strings.TrimPrefix(p, "/") }
+
 	remoteChanged := make(map[string]types.ChangeEntry)
 	for _, ch := range remoteChanges {
 		if ch.IsDir {
@@ -74,19 +79,19 @@ func CompareIncremental(
 		switch ch.Action {
 		case "put":
 			if ch.PathAfter != "" {
-				remoteChanged[ch.PathAfter] = ch
+				remoteChanged[normPath(ch.PathAfter)] = ch
 			}
 		case "delete":
 			if ch.PathBefore != "" {
-				remoteChanged[ch.PathBefore] = ch
+				remoteChanged[normPath(ch.PathBefore)] = ch
 			}
 		case "move":
 			// move = delete at path_before + put at path_after
 			if ch.PathBefore != "" {
-				remoteChanged[ch.PathBefore] = types.ChangeEntry{Action: "delete", PathBefore: ch.PathBefore}
+				remoteChanged[normPath(ch.PathBefore)] = types.ChangeEntry{Action: "delete", PathBefore: ch.PathBefore}
 			}
 			if ch.PathAfter != "" {
-				remoteChanged[ch.PathAfter] = ch
+				remoteChanged[normPath(ch.PathAfter)] = ch
 			}
 		}
 	}
