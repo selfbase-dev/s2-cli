@@ -63,7 +63,17 @@ func execute(
 	result := &ExecuteResult{}
 
 	for _, plan := range plans {
-		localPath := filepath.Join(localRoot, filepath.FromSlash(plan.Path))
+		// Defence-in-depth: every plan path came from either Walk (local
+		// filesystem, trusted) or from server data via Compare /
+		// CompareIncremental / HandleIncrementalDirEvents. safeJoin
+		// rejects `..`, null bytes and post-clean root escapes so a
+		// malicious or buggy server cannot trick the executor into
+		// writing outside localRoot.
+		localPath, err := safeJoin(localRoot, plan.Path)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("unsafe plan path %s: %w", plan.Path, err))
+			continue
+		}
 		remoteKey := remotePrefix + plan.Path
 
 		switch plan.Action {
@@ -137,6 +147,23 @@ func execute(
 			}
 			if err := executeConflict(localPath, remoteKey, plan.Path, plan.RevisionID, localRoot, c, state); err != nil {
 				result.Errors = append(result.Errors, fmt.Errorf("conflict %s: %w", plan.Path, err))
+				continue
+			}
+			result.Conflicts++
+
+		case types.PreserveLocalRename:
+			// Used when the server has removed a file (dir delete,
+			// scope-out move) but the local copy has edits we must
+			// not destroy. We rename to .sync-conflict-* and drop the
+			// archive entry — critically, we do NOT push back, which
+			// would resurrect the subtree the server just removed.
+			if dryRun {
+				fmt.Printf("[dry-run] preserve-local-rename: %s\n", plan.Path)
+				result.Conflicts++
+				continue
+			}
+			if err := executePreserveLocalRename(localPath, plan.Path, state); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("preserve %s: %w", plan.Path, err))
 				continue
 			}
 			result.Conflicts++
@@ -485,6 +512,31 @@ func conflictPushLocal(localPath, remoteKey, relPath string, c *client.Client, s
 		Size:           info.Size(),
 		SyncedAt:       time.Now().UTC().Format(time.RFC3339),
 	}
+	return nil
+}
+
+// executePreserveLocalRename renames the local file to a
+// .sync-conflict-* copy and drops its archive entry. Used when the
+// server has authoritatively removed the file (dir delete / scope-out
+// move) but the local copy diverged and must not be destroyed.
+// Crucially, NO network call — pushing the local copy back would
+// resurrect the subtree the server just deleted.
+func executePreserveLocalRename(localPath, relPath string, state *State) error {
+	// If local is already gone there's nothing to preserve; just untrack.
+	if _, err := os.Stat(localPath); err != nil {
+		if os.IsNotExist(err) {
+			delete(state.Files, relPath)
+			fmt.Printf("preserved (already gone): %s\n", relPath)
+			return nil
+		}
+		return err
+	}
+	conflictPath := conflictFileName(localPath)
+	if err := os.Rename(localPath, conflictPath); err != nil {
+		return err
+	}
+	delete(state.Files, relPath)
+	fmt.Printf("preserved local as %s: %s\n", filepath.Base(conflictPath), relPath)
 	return nil
 }
 

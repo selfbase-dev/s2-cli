@@ -200,27 +200,37 @@ func runIncrementalSync(cmd *cobra.Command, localDir, remotePrefix string, c *cl
 	// deletes / scope-internal moves, /api/snapshot for put dirs, and
 	// os.MkdirAll for mkdir. May mutate state.Files and the local
 	// tree, and may return a new primary cursor when a scope-root
-	// snapshot is performed.
+	// snapshot is performed. Subtree snapshots are returned raw —
+	// Compare() runs on them AFTER the post-side-effects re-walk so a
+	// concurrent user edit can't be overwritten by a stale dir-plan.
 	dirOutcome, err := s2sync.HandleIncrementalDirEvents(
-		c, localDir, localFiles, state.Files, dirChanges,
+		c, localDir, state.Files, dirChanges,
 	)
 	if err != nil {
 		return fmt.Errorf("dir event handling: %w", err)
 	}
-	if dirOutcome.LocalChanged {
-		// Re-walk after mkdir / rename side effects.
+	if dirOutcome.LocalChanged || len(dirOutcome.SubtreeSnapshots) > 0 {
+		// Re-walk after mkdir / rename side effects AND before the
+		// subtree Compare so the snapshot sees the fresh local tree.
 		localFiles, err = s2sync.Walk(localDir, state.Files, exclude)
 		if err != nil {
 			return fmt.Errorf("local re-scan failed: %w", err)
 		}
 	}
 
-	// Incremental three-way compare for the file-level events, then
-	// merge with dir-event-derived plans. Dir-event plans win the
-	// dedup tiebreak — they come from a fresh snapshot and should
-	// override stale file-event decisions for the same path.
+	// Compare subtree snapshots against the post-re-walk local state.
+	subtreePlans := dirOutcome.SubtreeComparePlans(localFiles, state.Files)
+
+	// Incremental three-way compare for the file-level events. Merge
+	// order (first → last, last wins): file-level events, then subtree
+	// compare plans (fresh snapshots), then archive-walk plans
+	// (dir-delete / move authoritative for those paths).
 	fileLevelPlans := s2sync.CompareIncremental(localFiles, state.Files, fileChanges)
-	plans := s2sync.MergePlansByPath(fileLevelPlans, dirOutcome.ExtraPlans)
+	plans := s2sync.MergePlansByPath(
+		fileLevelPlans,
+		subtreePlans,
+		dirOutcome.ArchiveWalkPlans,
+	)
 
 	hasLocalChanges := false
 	for path, l := range localFiles {

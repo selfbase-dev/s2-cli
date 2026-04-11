@@ -42,6 +42,14 @@ const (
 	DeleteLocal
 	DeleteRemote
 	Conflict
+	// PreserveLocalRename is used when the server has authoritatively
+	// removed a file (dir delete / move-out) but the local copy has
+	// been edited since the last sync. The executor renames the local
+	// file to a `.sync-conflict-*` copy and untracks it from the
+	// archive — it does NOT push the local back (which would resurrect
+	// the subtree the server just removed). See ADR 0040 §conflict
+	// detection + the fix for codex review blocker #4.
+	PreserveLocalRename
 )
 
 func (a SyncAction) String() string {
@@ -58,6 +66,8 @@ func (a SyncAction) String() string {
 		return "delete-remote"
 	case Conflict:
 		return "conflict"
+	case PreserveLocalRename:
+		return "preserve-local-rename"
 	default:
 		return "unknown"
 	}

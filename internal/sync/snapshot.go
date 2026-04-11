@@ -15,18 +15,24 @@ import (
 //
 // Paths are normalised to the slash-free keys used throughout the sync
 // pipeline (stripping the leading "/" that the server adds via
-// absolutePathToClient).
+// absolutePathToClient). Entries with traversal components, null bytes
+// or absolute-path indicators are silently dropped — the executor
+// would refuse to write them anyway, and we don't want a malicious
+// snapshot to abort the whole sync.
 func SnapshotToRemoteFiles(items []types.SnapshotItem) map[string]types.RemoteFile {
 	out := make(map[string]types.RemoteFile, len(items))
 	for _, it := range items {
 		if it.Type != "file" {
 			continue
 		}
+		key := strings.TrimPrefix(it.Path, "/")
+		if !isSafeRelativePath(key) {
+			continue
+		}
 		size := int64(0)
 		if it.Size != nil {
 			size = *it.Size
 		}
-		key := strings.TrimPrefix(it.Path, "/")
 		// Name is the final segment — used by a couple of display paths;
 		// not semantically load-bearing because Compare keys on the map key.
 		name := key
@@ -42,6 +48,24 @@ func SnapshotToRemoteFiles(items []types.SnapshotItem) map[string]types.RemoteFi
 		}
 	}
 	return out
+}
+
+// isSafeRelativePath does a cheap string-level validation for paths
+// that will later be fed into safeJoin. It is a filter, not a
+// validator — safeJoin is the authoritative check.
+func isSafeRelativePath(p string) bool {
+	if p == "" {
+		return false
+	}
+	if strings.ContainsRune(p, 0) {
+		return false
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // PrefillArchiveForIdempotentApply populates `archive` with FileState

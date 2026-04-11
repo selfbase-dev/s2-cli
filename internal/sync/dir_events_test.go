@@ -37,38 +37,6 @@ func exists(t *testing.T, dir, rel string) bool {
 	return err == nil
 }
 
-// --- normalize helpers ---
-
-func TestNormalizeDirPath(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"/", ""},
-		{"/foo", "foo"},
-		{"/foo/", "foo"},
-		{"foo/bar/", "foo/bar"},
-		{"", ""},
-	}
-	for _, tc := range cases {
-		if got := normalizeDirPath(tc.in); got != tc.want {
-			t.Errorf("normalizeDirPath(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
-func TestNormalizeDirPrefix(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"/", ""},
-		{"", ""},
-		{"/foo", "foo/"},
-		{"/foo/", "foo/"},
-		{"foo/bar", "foo/bar/"},
-	}
-	for _, tc := range cases {
-		if got := normalizeDirPrefix(tc.in); got != tc.want {
-			t.Errorf("normalizeDirPrefix(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
 // --- expandArchiveDelete ---
 
 func TestExpandArchiveDelete_UnchangedLocal(t *testing.T) {
@@ -81,7 +49,10 @@ func TestExpandArchiveDelete_UnchangedLocal(t *testing.T) {
 		"photos/b.jpg": {LocalHash: "h-photos"},
 	}
 
-	plans := expandArchiveDelete(archive, dir, "docs/")
+	plans, err := expandArchiveDelete(archive, dir, "docs/")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(plans) != 1 {
 		t.Fatalf("got %d plans, want 1", len(plans))
 	}
@@ -90,7 +61,7 @@ func TestExpandArchiveDelete_UnchangedLocal(t *testing.T) {
 	}
 }
 
-func TestExpandArchiveDelete_LocalEditedBecomesConflict(t *testing.T) {
+func TestExpandArchiveDelete_LocalEditedBecomesPreserveRename(t *testing.T) {
 	dir := t.TempDir()
 	writeLocalFile(t, dir, "docs/a.txt", "hello")
 
@@ -99,12 +70,15 @@ func TestExpandArchiveDelete_LocalEditedBecomesConflict(t *testing.T) {
 		"docs/a.txt": {LocalHash: "h-stale"},
 	}
 
-	plans := expandArchiveDelete(archive, dir, "docs/")
+	plans, err := expandArchiveDelete(archive, dir, "docs/")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(plans) != 1 {
 		t.Fatalf("got %d plans, want 1", len(plans))
 	}
-	if plans[0].Action != types.Conflict {
-		t.Errorf("action = %v, want Conflict (local edited since last sync)", plans[0].Action)
+	if plans[0].Action != types.PreserveLocalRename {
+		t.Errorf("action = %v, want PreserveLocalRename (locally edited)", plans[0].Action)
 	}
 }
 
@@ -117,7 +91,10 @@ func TestExpandArchiveDelete_EmptyPrefixMatchesEverything(t *testing.T) {
 		"photos/b.jpg": {LocalHash: h2},
 	}
 
-	plans := expandArchiveDelete(archive, dir, "")
+	plans, err := expandArchiveDelete(archive, dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(plans) != 2 {
 		t.Fatalf("got %d plans, want 2 (empty prefix = scope wipe)", len(plans))
 	}
@@ -131,12 +108,52 @@ func TestExpandArchiveDelete_SimilarPrefixNotConfused(t *testing.T) {
 		"photos/a.jpg":      {LocalHash: h1},
 		"photosExtra/b.jpg": {LocalHash: h2},
 	}
-	plans := expandArchiveDelete(archive, dir, "photos/")
+	plans, err := expandArchiveDelete(archive, dir, "photos/")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(plans) != 1 {
 		t.Fatalf("got %d plans, want 1 (photosExtra must not match)", len(plans))
 	}
 	if plans[0].Path != "photos/a.jpg" {
 		t.Errorf("plan path = %q", plans[0].Path)
+	}
+}
+
+// Codex blocker #3: a local-only file under the deleted prefix (not in
+// archive) must be preserved as a conflict copy. Without this fix it
+// would be picked up by CompareIncremental as "local new" and pushed
+// back, resurrecting the subtree.
+func TestExpandArchiveDelete_LocalOnlyDescendantPreserved(t *testing.T) {
+	dir := t.TempDir()
+	h := writeLocalFileExpectHash(t, dir, "docs/tracked.txt", "t")
+	writeLocalFile(t, dir, "docs/untracked.txt", "u")
+
+	archive := map[string]types.FileState{
+		"docs/tracked.txt": {LocalHash: h},
+	}
+
+	plans, err := expandArchiveDelete(archive, dir, "docs/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plans) != 2 {
+		t.Fatalf("got %d plans, want 2 (one tracked + one untracked)", len(plans))
+	}
+	var tracked, untracked types.SyncPlan
+	for _, p := range plans {
+		switch p.Path {
+		case "docs/tracked.txt":
+			tracked = p
+		case "docs/untracked.txt":
+			untracked = p
+		}
+	}
+	if tracked.Action != types.DeleteLocal {
+		t.Errorf("tracked action = %v, want DeleteLocal", tracked.Action)
+	}
+	if untracked.Action != types.PreserveLocalRename {
+		t.Errorf("untracked action = %v, want PreserveLocalRename", untracked.Action)
 	}
 }
 
@@ -174,7 +191,7 @@ func TestExpandArchiveMove_RenamesUnchangedFiles(t *testing.T) {
 	}
 }
 
-func TestExpandArchiveMove_LocalEditedBecomesConflict(t *testing.T) {
+func TestExpandArchiveMove_LocalEditedBecomesPreserveRename(t *testing.T) {
 	dir := t.TempDir()
 	writeLocalFile(t, dir, "old/a.txt", "local-edit")
 
@@ -182,47 +199,77 @@ func TestExpandArchiveMove_LocalEditedBecomesConflict(t *testing.T) {
 		"old/a.txt": {LocalHash: "h-stale"},
 	}
 
-	plans, mutated, err := expandArchiveMove(archive, dir, "old/", "new/")
+	plans, _, err := expandArchiveMove(archive, dir, "old/", "new/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mutated {
-		t.Error("mutated = true, want false (conflict should leave tree alone)")
-	}
-	if len(plans) != 1 || plans[0].Action != types.Conflict {
-		t.Errorf("plans = %+v", plans)
+	if len(plans) != 1 || plans[0].Action != types.PreserveLocalRename {
+		t.Errorf("plans = %+v, want one PreserveLocalRename", plans)
 	}
 	if !exists(t, dir, "old/a.txt") {
-		t.Error("old/a.txt should still exist on conflict")
+		t.Error("old/a.txt should still exist on conflict preserve")
 	}
-	if _, ok := archive["old/a.txt"]; !ok {
-		t.Error("archive entry should remain on conflict")
+	if _, ok := archive["old/a.txt"]; ok {
+		t.Error("archive entry should be removed on conflict preserve")
+	}
+}
+
+// Codex blocker #3 variant for move: a local-only descendant under the
+// old prefix should be renamed to the new prefix alongside the tracked
+// files, so it doesn't get pushed back under the old location.
+func TestExpandArchiveMove_LocalOnlyDescendantIsRenamed(t *testing.T) {
+	dir := t.TempDir()
+	h := writeLocalFileExpectHash(t, dir, "old/tracked.txt", "t")
+	writeLocalFile(t, dir, "old/untracked.txt", "u")
+
+	archive := map[string]types.FileState{
+		"old/tracked.txt": {LocalHash: h},
+	}
+
+	_, mutated, err := expandArchiveMove(archive, dir, "old/", "new/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mutated {
+		t.Error("mutated = false, want true")
+	}
+	if !exists(t, dir, "new/tracked.txt") {
+		t.Error("new/tracked.txt should exist")
+	}
+	if !exists(t, dir, "new/untracked.txt") {
+		t.Error("new/untracked.txt should exist (local-only descendant must be renamed)")
+	}
+	if exists(t, dir, "old/tracked.txt") || exists(t, dir, "old/untracked.txt") {
+		t.Error("old/ should be empty after rename")
 	}
 }
 
 // --- MergePlansByPath ---
 
-func TestMergePlansByPath_DirEventsOverrideIncremental(t *testing.T) {
-	incremental := []types.SyncPlan{
-		{Path: "a.txt", Action: types.Push},
-		{Path: "b.txt", Action: types.DeleteLocal},
+func TestMergePlansByPath_LastWriterWins(t *testing.T) {
+	// First list has one entry; second list overrides it; third list
+	// overrides the second. This matches the incremental sync merge
+	// order (file events → subtree compare → archive walk).
+	first := []types.SyncPlan{{Path: "a.txt", Action: types.Push}}
+	second := []types.SyncPlan{{Path: "a.txt", Action: types.Pull, RevisionID: "rev_a"}}
+	third := []types.SyncPlan{{Path: "a.txt", Action: types.DeleteLocal}}
+
+	merged := MergePlansByPath(first, second, third)
+	if len(merged) != 1 {
+		t.Fatalf("got %d plans, want 1", len(merged))
 	}
-	dirEvents := []types.SyncPlan{
-		{Path: "a.txt", Action: types.Pull, RevisionID: "rev_a"},
-		{Path: "c.txt", Action: types.Pull, RevisionID: "rev_c"},
+	if merged[0].Action != types.DeleteLocal {
+		t.Errorf("action = %v, want DeleteLocal (last list wins)", merged[0].Action)
 	}
-	merged := MergePlansByPath(incremental, dirEvents)
+}
+
+func TestMergePlansByPath_UnionKeepsDisjointPaths(t *testing.T) {
+	a := []types.SyncPlan{{Path: "a.txt", Action: types.Push}}
+	b := []types.SyncPlan{{Path: "b.txt", Action: types.Pull}}
+	c := []types.SyncPlan{{Path: "c.txt", Action: types.DeleteLocal}}
+
+	merged := MergePlansByPath(a, b, c)
 	if len(merged) != 3 {
 		t.Fatalf("got %d plans, want 3", len(merged))
-	}
-	byPath := make(map[string]types.SyncPlan)
-	for _, p := range merged {
-		byPath[p.Path] = p
-	}
-	if byPath["a.txt"].Action != types.Pull || byPath["a.txt"].RevisionID != "rev_a" {
-		t.Errorf("a.txt = %+v, want dir-event override", byPath["a.txt"])
-	}
-	if byPath["b.txt"].Action != types.DeleteLocal {
-		t.Errorf("b.txt = %+v, want DeleteLocal (incremental only)", byPath["b.txt"])
 	}
 }

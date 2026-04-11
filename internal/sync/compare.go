@@ -80,6 +80,19 @@ func CompareIncremental(
 	// so change paths match the slash-free keys used by Walk and ListAllRecursive.
 	normPath := func(p string) string { return strings.TrimPrefix(p, "/") }
 
+	// safeKey is normPath + defence-in-depth traversal filter. Unsafe
+	// paths (traversal, null bytes, empty) are dropped — the executor
+	// would refuse them via safeJoin anyway, and silently filtering
+	// here keeps a single bad change entry from derailing the whole
+	// sync batch.
+	safeKey := func(p string) (string, bool) {
+		k := normPath(p)
+		if !isSafeRelativePath(k) {
+			return "", false
+		}
+		return k, true
+	}
+
 	remoteChanged := make(map[string]types.ChangeEntry)
 	for _, ch := range remoteChanges {
 		// Callers are expected to pre-split dir events out and route
@@ -92,19 +105,27 @@ func CompareIncremental(
 		switch ch.Action {
 		case "put":
 			if ch.PathAfter != "" {
-				remoteChanged[normPath(ch.PathAfter)] = ch
+				if k, ok := safeKey(ch.PathAfter); ok {
+					remoteChanged[k] = ch
+				}
 			}
 		case "delete":
 			if ch.PathBefore != "" {
-				remoteChanged[normPath(ch.PathBefore)] = ch
+				if k, ok := safeKey(ch.PathBefore); ok {
+					remoteChanged[k] = ch
+				}
 			}
 		case "move":
 			// move = delete at path_before + put at path_after
 			if ch.PathBefore != "" {
-				remoteChanged[normPath(ch.PathBefore)] = types.ChangeEntry{Action: "delete", PathBefore: ch.PathBefore}
+				if k, ok := safeKey(ch.PathBefore); ok {
+					remoteChanged[k] = types.ChangeEntry{Action: "delete", PathBefore: ch.PathBefore}
+				}
 			}
 			if ch.PathAfter != "" {
-				remoteChanged[normPath(ch.PathAfter)] = ch
+				if k, ok := safeKey(ch.PathAfter); ok {
+					remoteChanged[k] = ch
+				}
 			}
 		}
 	}

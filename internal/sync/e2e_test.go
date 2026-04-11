@@ -294,20 +294,25 @@ func (e *testEnv) incrementalSync(state *State) *ExecuteResult {
 	}
 
 	dirOutcome, err := HandleIncrementalDirEvents(
-		e.client, e.localDir, localFiles, state.Files, dirChanges,
+		e.client, e.localDir, state.Files, dirChanges,
 	)
 	if err != nil {
 		e.t.Fatalf("HandleIncrementalDirEvents: %v", err)
 	}
-	if dirOutcome.LocalChanged {
+	if dirOutcome.LocalChanged || len(dirOutcome.SubtreeSnapshots) > 0 {
 		localFiles, err = Walk(e.localDir, state.Files, exclude)
 		if err != nil {
 			e.t.Fatalf("Walk (post dir events): %v", err)
 		}
 	}
 
+	subtreePlans := dirOutcome.SubtreeComparePlans(localFiles, state.Files)
 	fileLevelPlans := CompareIncremental(localFiles, state.Files, fileChanges)
-	plans := MergePlansByPath(fileLevelPlans, dirOutcome.ExtraPlans)
+	plans := MergePlansByPath(
+		fileLevelPlans,
+		subtreePlans,
+		dirOutcome.ArchiveWalkPlans,
+	)
 
 	result, err := Execute(plans, e.localDir, "", e.client, state, false)
 	if err != nil {

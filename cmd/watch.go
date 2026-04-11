@@ -374,20 +374,25 @@ func runIncrementalSyncInner(cmd *cobra.Command, localDir, remotePrefix string, 
 	}
 
 	dirOutcome, err := s2sync.HandleIncrementalDirEvents(
-		c, localDir, localFiles, state.Files, dirChanges,
+		c, localDir, state.Files, dirChanges,
 	)
 	if err != nil {
 		return fmt.Errorf("dir event handling: %w", err)
 	}
-	if dirOutcome.LocalChanged {
+	if dirOutcome.LocalChanged || len(dirOutcome.SubtreeSnapshots) > 0 {
 		localFiles, err = s2sync.Walk(localDir, state.Files, exclude)
 		if err != nil {
 			return fmt.Errorf("local re-scan failed: %w", err)
 		}
 	}
 
+	subtreePlans := dirOutcome.SubtreeComparePlans(localFiles, state.Files)
 	fileLevelPlans := s2sync.CompareIncremental(localFiles, state.Files, fileChanges)
-	plans := s2sync.MergePlansByPath(fileLevelPlans, dirOutcome.ExtraPlans)
+	plans := s2sync.MergePlansByPath(
+		fileLevelPlans,
+		subtreePlans,
+		dirOutcome.ArchiveWalkPlans,
+	)
 
 	var hasErrors bool
 	if len(plans) > 0 {
