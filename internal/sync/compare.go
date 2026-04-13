@@ -2,7 +2,6 @@ package sync
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/selfbase-dev/s2-cli/internal/types"
@@ -57,9 +56,7 @@ func Compare(
 		}
 	}
 
-	sort.Slice(plans, func(i, j int) bool {
-		return plans[i].Path < plans[j].Path
-	})
+	sortPlansByPath(plans)
 
 	return plans
 }
@@ -217,9 +214,7 @@ func CompareIncremental(
 		}
 	}
 
-	sort.Slice(plans, func(i, j int) bool {
-		return plans[i].Path < plans[j].Path
-	})
+	sortPlansByPath(plans)
 
 	return plans
 }
