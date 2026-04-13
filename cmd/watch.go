@@ -164,7 +164,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	endpoint := viper.GetString("endpoint")
 	c := client.New(endpoint, token)
 
-	// Get token ID; derive remotePrefix from base_path
+	// Derive remotePrefix from base_path
 	me, err := c.Me()
 	if err != nil {
 		return fmt.Errorf("failed to get auth context: %w", err)
@@ -176,7 +176,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 	// Initial full sync
 	fmt.Fprintln(cmd.OutOrStdout(), "Running initial sync...")
-	if err := doSync(cmd, localDir, remotePrefix, c, me.TokenID, &syncMu); err != nil {
+	if err := doSync(cmd, localDir, remotePrefix, c, &syncMu); err != nil {
 		return fmt.Errorf("initial sync failed: %w", err)
 	}
 
@@ -223,13 +223,10 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		}
 		// ADR 0038 decision 4: resync_required removed. Scope-wide events
 		// arrive as explicit `delete /` / `put /` entries.
-		// Filter self-changes (same logic as sync.go)
+		// Filter self-changes: seq-based only (see SELF-317)
 		hasRemoteChanges := false
 		for _, ch := range resp.Changes {
 			if state.IsPushedSeq(ch.Seq) {
-				continue
-			}
-			if ch.TokenID != "" && ch.TokenID == state.TokenID {
 				continue
 			}
 			hasRemoteChanges = true
@@ -244,7 +241,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 	// Build sync function
 	syncFn := func() error {
-		return doSync(cmd, localDir, remotePrefix, c, me.TokenID, &syncMu)
+		return doSync(cmd, localDir, remotePrefix, c, &syncMu)
 	}
 
 	// Run watch loop
@@ -265,7 +262,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 }
 
 // doSync performs a full sync cycle with mutex for serialization.
-func doSync(cmd *cobra.Command, localDir, remotePrefix string, c *client.Client, tokenID string, mu *sync.Mutex) error {
+func doSync(cmd *cobra.Command, localDir, remotePrefix string, c *client.Client, mu *sync.Mutex) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -273,7 +270,6 @@ func doSync(cmd *cobra.Command, localDir, remotePrefix string, c *client.Client,
 	if err != nil {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
-	state.TokenID = tokenID
 
 	if state.Cursor == "" {
 		return runInitialSyncInner(cmd, localDir, remotePrefix, c, state)
@@ -351,13 +347,10 @@ func runIncrementalSyncInner(cmd *cobra.Command, localDir, remotePrefix string, 
 	// ADR 0038 decision 4: resync_required removed. Scope-wide events
 	// arrive as explicit `delete /` / `put /` entries.
 
-	// Filter remote changes (server already returns base_path-relative client paths)
+	// Filter self-changes: seq-based only (see SELF-317)
 	var remoteChanges []types.ChangeEntry
 	for _, ch := range resp.Changes {
 		if state.IsPushedSeq(ch.Seq) {
-			continue
-		}
-		if ch.TokenID != "" && ch.TokenID == state.TokenID {
 			continue
 		}
 		remoteChanges = append(remoteChanges, ch)

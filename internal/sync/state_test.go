@@ -46,7 +46,6 @@ func TestSaveState_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	state := &State{
 		Cursor:     "opaque_cursor",
-		TokenID:    "tok_123",
 		PushedSeqs: []int64{10, 20},
 		Files: map[string]types.FileState{
 			"readme.md": {LocalHash: "sha256hash", ContentVersion: 42, Size: 1024},
@@ -63,9 +62,6 @@ func TestSaveState_RoundTrip(t *testing.T) {
 	}
 	if loaded.Cursor != "opaque_cursor" {
 		t.Errorf("Cursor = %q", loaded.Cursor)
-	}
-	if loaded.TokenID != "tok_123" {
-		t.Errorf("TokenID = %q", loaded.TokenID)
 	}
 	if len(loaded.PushedSeqs) != 2 {
 		t.Errorf("PushedSeqs = %v", loaded.PushedSeqs)

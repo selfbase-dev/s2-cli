@@ -14,7 +14,6 @@ type State struct {
 	Version    int                        `json:"version"`
 	SyncedAt   string                     `json:"synced_at"`
 	Cursor     string                     `json:"cursor,omitempty"`
-	TokenID    string                     `json:"token_id,omitempty"`
 	PushedSeqs []int64                    `json:"pushed_seqs,omitempty"`
 	Files      map[string]types.FileState `json:"files"`
 }
