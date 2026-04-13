@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -89,6 +90,7 @@ func CompareIncremental(
 	safeKey := func(p string) (string, bool) {
 		k := normPath(p)
 		if !isSafeRelativePath(k) {
+			fmt.Printf("warning: skipping unsafe remote path: %s\n", p)
 			return "", false
 		}
 		return k, true

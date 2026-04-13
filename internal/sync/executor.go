@@ -457,7 +457,13 @@ func executeConflict(localPath, remoteKey, relPath, revisionID, localRoot string
 		// Local might not exist (delete-vs-change conflict)
 		localHash = ""
 	}
-	remoteHash, _ := hashFile(tmpPath)
+	remoteHash, err := hashFile(tmpPath)
+	if err != nil {
+		// tmpPath was written moments ago — if we can't hash it,
+		// something is seriously wrong; treat as error, not conflict.
+		os.Remove(tmpPath)
+		return fmt.Errorf("hash temp file for conflict comparison: %w", err)
+	}
 
 	if localHash != "" && localHash == remoteHash {
 		// Identical content — not a real conflict, just record state
