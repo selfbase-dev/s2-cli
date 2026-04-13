@@ -205,12 +205,6 @@ func (e *testEnv) sync() *ExecuteResult {
 		e.t.Fatalf("LoadState: %v", err)
 	}
 
-	me, err := e.client.Me()
-	if err != nil {
-		e.t.Fatalf("Me: %v", err)
-	}
-	state.TokenID = me.TokenID
-
 	if state.Cursor == "" {
 		return e.initialSync(state)
 	}
@@ -273,9 +267,6 @@ func (e *testEnv) incrementalSync(state *State) *ExecuteResult {
 	for _, ch := range resp.Changes {
 		if !e.skipSelfFilter {
 			if state.IsPushedSeq(ch.Seq) {
-				continue
-			}
-			if ch.TokenID != "" && ch.TokenID == state.TokenID {
 				continue
 			}
 		}
@@ -729,12 +720,6 @@ func TestS32_PullDuringLocalEdit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadState: %v", err)
 	}
-	me, err := env.client.Me()
-	if err != nil {
-		t.Fatalf("Me: %v", err)
-	}
-	state.TokenID = me.TokenID
-
 	exclude := LoadExclude(env.localDir)
 	localFiles, err := Walk(env.localDir, state.Files, exclude)
 	if err != nil {

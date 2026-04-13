@@ -62,7 +62,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	endpoint := viper.GetString("endpoint")
 	c := client.New(endpoint, token)
 
-	// Get token ID for self-change filtering; derive remotePrefix from base_path
+	// Derive remotePrefix from base_path
 	me, err := c.Me()
 	if err != nil {
 		return fmt.Errorf("failed to get auth context: %w", err)
@@ -74,7 +74,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
-	state.TokenID = me.TokenID
 
 	// Decide: initial sync or incremental
 	if state.Cursor == "" {
@@ -173,14 +172,13 @@ func runIncrementalSync(cmd *cobra.Command, localDir, remotePrefix string, c *cl
 	// `delete /` / `put /` entries and are handled by the hybrid
 	// strategy below (ADR 0040 §操作×スコープマトリクス).
 
-	// Filter remote changes (server already returns base_path-relative client paths)
+	// Filter self-changes: seq-based only. Token-id matching was removed
+	// because it is too coarse — same token on multiple devices would
+	// silently skip the other device's changes. Seq miss is harmless
+	// (hash comparison → no-op). See SELF-317.
 	var remoteChanges []types.ChangeEntry
 	for _, ch := range resp.Changes {
-		// Self-change filter: seq-based (primary) + token_id (defense-in-depth)
 		if state.IsPushedSeq(ch.Seq) {
-			continue
-		}
-		if ch.TokenID != "" && ch.TokenID == state.TokenID {
 			continue
 		}
 		remoteChanges = append(remoteChanges, ch)
