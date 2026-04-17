@@ -9,16 +9,45 @@ import (
 	"github.com/selfbase-dev/s2-sync/internal/service"
 )
 
-// registerTray installs NSStatusItem callbacks into the existing
-// NSApplication without owning the main event loop. Using Register (not
-// Run) lets Wails keep the main thread — the Wails run loop dispatches
-// tray target-actions for us. systray.Quit should be called on
-// shutdown (see OnShutdown in main).
-func registerTray(app *App) {
-	systray.Register(func() { onTrayReady(app) }, func() {})
+// trayStart / trayEnd are hooks from systray.RunWithExternalLoop —
+// start kicks off the native tray init without starting its own event
+// loop, end tears it down at shutdown. Both are safe to call from the
+// main goroutine.
+var (
+	trayStart func()
+	trayEnd   func()
+)
+
+// setupTray registers the tray callbacks and captures the native
+// start/end hooks. Must be called from package init / main goroutine
+// before wails.Run owns the thread so the systray package's own
+// runtime.LockOSThread pin still matches.
+func setupTray(app *App) {
+	trayStart, trayEnd = systray.RunWithExternalLoop(
+		func() { onTrayReady(app) },
+		func() {},
+	)
+}
+
+// startTray triggers native-side init. Called after Wails has brought
+// up NSApplication so NSStatusItem creation happens inside an active
+// run loop.
+func startTray() {
+	if trayStart != nil {
+		trayStart()
+	}
+}
+
+func stopTray() {
+	if trayEnd != nil {
+		trayEnd()
+	}
 }
 
 func onTrayReady(app *App) {
+	// Fires on the main thread once NSStatusItem is ready. Must not
+	// block — build the menu and hand click handling to a goroutine,
+	// then return so the run loop keeps pumping.
 	systray.SetTitle("S2")
 	systray.SetTooltip("s2sync")
 
@@ -34,7 +63,7 @@ func onTrayReady(app *App) {
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit s2sync", "Exit")
 
-	// Keep tray labels/visibility in sync with service events.
+	// Keep tray label/visibility in sync with service events.
 	go func() {
 		ch := app.svc.Subscribe()
 		for range ch {
@@ -42,36 +71,38 @@ func onTrayReady(app *App) {
 		}
 	}()
 
-	// Menu item click handling. systray guarantees these channels are
-	// drained on the goroutine running them; keep them lightweight.
-	for {
-		select {
-		case <-mShow.ClickedCh:
-			if app.ctx != nil {
-				wailsruntime.WindowShow(app.ctx)
+	// One goroutine for menu-click handling — onTrayReady returns
+	// immediately so the run loop can pump.
+	go func() {
+		for {
+			select {
+			case <-mShow.ClickedCh:
+				if app.ctx != nil {
+					wailsruntime.WindowShow(app.ctx)
+				}
+			case <-mStart.ClickedCh:
+				if app.ctx == nil {
+					continue
+				}
+				st := app.svc.Status()
+				if st.Mount != nil {
+					_ = app.svc.Start(app.ctx, *st.Mount)
+				} else {
+					wailsruntime.WindowShow(app.ctx)
+				}
+			case <-mStop.ClickedCh:
+				_ = app.svc.Stop()
+			case <-mAutostart.ClickedCh:
+				toggleAutostart(mAutostart)
+			case <-mQuit.ClickedCh:
+				_ = app.svc.Stop()
+				if app.ctx != nil {
+					wailsruntime.Quit(app.ctx)
+				}
+				return
 			}
-		case <-mStart.ClickedCh:
-			if app.ctx == nil {
-				continue
-			}
-			st := app.svc.Status()
-			if st.Mount != nil {
-				_ = app.svc.Start(app.ctx, *st.Mount)
-			} else {
-				wailsruntime.WindowShow(app.ctx)
-			}
-		case <-mStop.ClickedCh:
-			_ = app.svc.Stop()
-		case <-mAutostart.ClickedCh:
-			toggleAutostart(mAutostart)
-		case <-mQuit.ClickedCh:
-			_ = app.svc.Stop()
-			if app.ctx != nil {
-				wailsruntime.Quit(app.ctx)
-			}
-			return
 		}
-	}
+	}()
 }
 
 func refreshTray(app *App, mStatus, mStart, mStop *systray.MenuItem) {
