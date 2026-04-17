@@ -47,6 +47,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	go a.forwardEvents()
 	go a.maybeAutoResume()
+	// Wails forces Regular activation policy; flip it to Accessory so
+	// LSUIElement actually takes effect and the Dock icon goes away.
+	makeAccessoryApp()
 }
 
 // maybeAutoResume kicks off sync at launch when both a token and a
