@@ -119,7 +119,16 @@ func (s *SyncService) markSynced() {
 
 // Start begins watching the given mount. Returns immediately; sync runs
 // in a background goroutine until Stop is called or ctx is cancelled.
+//
+// Admission is atomic: the state, cancel, and done channel are claimed
+// under the lock before any network or disk I/O. A concurrent Start
+// always sees StatusRunning and returns an error. On setup failure the
+// slot is released (Idle) and done is closed so Wait() unblocks.
 func (s *SyncService) Start(ctx context.Context, mount Mount) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	s.mu.Lock()
 	switch s.state.Status {
 	case StatusRunning:
@@ -129,29 +138,46 @@ func (s *SyncService) Start(ctx context.Context, mount Mount) error {
 		s.mu.Unlock()
 		return fmt.Errorf("still stopping; try again shortly")
 	}
+	// Claim the slot atomically — derive the cancel/done under the
+	// same lock that transitions status, so a concurrent Start always
+	// sees StatusRunning by the time it acquires the mutex.
+	runCtx, cancel := context.WithCancel(ctx)
+	s.state = StateInfo{Status: StatusRunning, Mount: &mount}
+	s.cancel = cancel
+	s.done = make(chan struct{})
+	done := s.done
 	s.mu.Unlock()
+
+	fail := func(err error) error {
+		cancel()
+		s.mu.Lock()
+		s.state = StateInfo{Status: StatusIdle}
+		s.mu.Unlock()
+		close(done)
+		return err
+	}
 
 	info, err := os.Stat(mount.Path)
 	if err != nil {
-		return fmt.Errorf("local directory not found: %w", err)
+		return fail(fmt.Errorf("local directory not found: %w", err))
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", mount.Path)
+		return fail(fmt.Errorf("%s is not a directory", mount.Path))
 	}
 
 	if err := s2sync.EnsureIgnoreFile(mount.Path); err != nil {
-		return fmt.Errorf("create .s2ignore: %w", err)
+		return fail(fmt.Errorf("create .s2ignore: %w", err))
 	}
 
 	token, err := auth.LoadToken()
 	if err != nil {
-		return err
+		return fail(err)
 	}
 
 	c := client.New(s.endpoint, token)
 	me, err := c.Me()
 	if err != nil {
-		return fmt.Errorf("auth: %w", err)
+		return fail(fmt.Errorf("auth: %w", err))
 	}
 
 	identity := s2sync.Identity{
@@ -161,18 +187,10 @@ func (s *SyncService) Start(ctx context.Context, mount Mount) error {
 	}
 	state, err := s2sync.LoadState(mount.Path, identity)
 	if err != nil {
-		return fmt.Errorf("load state: %w", err)
+		return fail(fmt.Errorf("load state: %w", err))
 	}
 
 	remotePrefix := strings.TrimPrefix(me.BasePath, "/")
-
-	runCtx, cancel := context.WithCancel(ctx)
-
-	s.mu.Lock()
-	s.state = StateInfo{Status: StatusRunning, Mount: &mount}
-	s.cancel = cancel
-	s.done = make(chan struct{})
-	s.mu.Unlock()
 
 	s.emit(Event{Type: EventStarted, Mount: &mount})
 

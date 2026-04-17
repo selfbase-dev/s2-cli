@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const launchAgentLabel = "dev.selfbase.s2sync"
@@ -32,12 +33,20 @@ func IsAutostartEnabled() bool {
 // agent invokes `open -a <bundle>` so macOS treats it as a real app
 // launch (Dock / LSUIElement / proper NSApplication setup). Falls back
 // to launching the raw binary for non-bundled cases.
+//
+// Enable path: unload-then-load with launchctl. If load fails (stale
+// plist, permissions, etc.) the error is surfaced so callers can
+// report "couldn't register for auto-launch" rather than silently
+// reporting a green checkbox that won't fire at login. The prior
+// unload is best-effort — it's expected to fail when nothing is
+// currently loaded.
 func SetAutostart(enabled bool, exePath string) error {
 	path, err := launchAgentPath()
 	if err != nil {
 		return err
 	}
 	if !enabled {
+		// Unload if currently loaded; ignore error when it isn't.
 		_ = exec.Command("launchctl", "unload", path).Run()
 		return removeIfExists(path)
 	}
@@ -73,9 +82,13 @@ func SetAutostart(enabled bool, exePath string) error {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return err
 	}
-	// Best-effort unload first (to replace any prior plist), then load.
+	// Replace any prior plist (unload is best-effort), then load. Load
+	// errors are real — report them so the UI doesn't show "on" when
+	// launchd didn't accept the agent.
 	_ = exec.Command("launchctl", "unload", path).Run()
-	_ = exec.Command("launchctl", "load", path).Run()
+	if out, err := exec.Command("launchctl", "load", path).CombinedOutput(); err != nil {
+		return fmt.Errorf("launchctl load: %w: %s", err, strings.TrimSpace(string(out)))
+	}
 	return nil
 }
 

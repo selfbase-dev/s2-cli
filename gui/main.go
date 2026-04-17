@@ -15,10 +15,13 @@ var assets embed.FS
 
 func main() {
 	app := NewApp()
-	// systray.RunWithExternalLoop's nativeStart creates the
-	// NSStatusItem and installs its own SystrayAppDelegate — do it on
-	// main before wails.Run so NSApp sharedApplication is set up once
-	// and the AppKit calls run on the right thread.
+	// systray.RunWithExternalLoop creates a small owner object and
+	// calls applicationDidFinishLaunching on it to install the
+	// NSStatusItem. It does NOT set itself as NSApp's delegate, so
+	// Wails' own delegate takes over cleanly once wails.Run runs.
+	// nativeStart must be called on the main thread — invoking it here
+	// from main (before wails.Run) satisfies that without needing a
+	// dispatch hop.
 	setupTray(app)
 	startTray()
 
@@ -47,6 +50,11 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown: func(_ context.Context) {
+			// Graceful shutdown: signal sync to stop, wait for the
+			// run goroutine to drain so state.Close happens before the
+			// process exits. Then tear down the tray.
+			_ = app.svc.Stop()
+			app.svc.Wait()
 			stopTray()
 		},
 		Bind: []interface{}{

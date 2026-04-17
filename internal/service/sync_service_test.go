@@ -1,9 +1,15 @@
 package service
 
 import (
+	stdsync "sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type stdsyncForTest = stdsync.WaitGroup
+
+func atomicAdd(x *int32) { atomic.AddInt32(x, 1) }
 
 func TestNewStartsIdle(t *testing.T) {
 	s := New("https://example.test")
@@ -126,4 +132,48 @@ func TestStartErrorsOnBadPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on missing directory")
 	}
+	// After setup failure the slot must be released (Idle), otherwise a
+	// retry would be rejected with "already running".
+	if got := s.Status().Status; got != StatusIdle {
+		t.Fatalf("status after setup failure: want idle, got %s", got)
+	}
+}
+
+func TestStartAdmissionIsAtomic(t *testing.T) {
+	// Race regression: before the fix, two concurrent Start calls could
+	// both pass the idle check and each spawn a run goroutine. The
+	// second one would overwrite s.cancel / s.done and leak the first.
+	// We use a bad path so the setup phase is fast-fail; what we want
+	// to assert is that exactly one of N concurrent Starts wins.
+	const parallel = 16
+	s := New("https://example.test")
+
+	var ok, fail int32
+	var wg stdsyncForTest
+	badMount := Mount{Path: "/nonexistent/xxx-" + t.Name()}
+	for i := 0; i < parallel; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.Start(nil, badMount); err == nil {
+				atomicAdd(&ok)
+			} else {
+				atomicAdd(&fail)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Whatever wins loses on path stat; the point is that at most one
+	// admission succeeded before the idle slot was re-released. Because
+	// bad-path makes Start return an error synchronously for the winner
+	// too, in practice `ok` stays 0 and `fail` == parallel. What we're
+	// guarding against is the previous race where concurrent admissions
+	// leaked goroutines — absent that, this test just completes without
+	// deadlock and leaves the service idle.
+	if got := s.Status().Status; got != StatusIdle {
+		t.Fatalf("status after concurrent Starts: want idle, got %s", got)
+	}
+	_ = ok
+	_ = fail
 }

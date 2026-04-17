@@ -9,19 +9,18 @@ import (
 	"github.com/selfbase-dev/s2-sync/internal/service"
 )
 
-// trayStart / trayEnd are hooks from systray.RunWithExternalLoop —
-// start kicks off the native tray init without starting its own event
-// loop, end tears it down at shutdown. Both are safe to call from the
-// main goroutine.
+// trayStart / trayEnd are the hooks returned by
+// systray.RunWithExternalLoop. start fires the one-shot native init
+// (creates NSStatusItem and invokes onReady); end tears it down. Both
+// expect the main thread — we call start from main before wails.Run.
 var (
 	trayStart func()
 	trayEnd   func()
 )
 
-// setupTray registers the tray callbacks and captures the native
-// start/end hooks. Must be called from package init / main goroutine
-// before wails.Run owns the thread so the systray package's own
-// runtime.LockOSThread pin still matches.
+// setupTray registers onReady / onExit callbacks and captures the
+// native start/end hooks. Must run on the main goroutine so it matches
+// systray's package-level runtime.LockOSThread pin.
 func setupTray(app *App) {
 	trayStart, trayEnd = systray.RunWithExternalLoop(
 		func() { onTrayReady(app) },
