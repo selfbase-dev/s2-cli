@@ -70,29 +70,43 @@ func (s *SyncService) run(ctx context.Context, c *client.Client, state *s2sync.S
 	localChanged := make(chan struct{}, 1)
 	go filterFsEvents(ctx, watcher, localDir, exclude, localChanged)
 
-	pollFn := func() (hasChanges, needResync bool, err error) {
+	// pollRemote issues one poll request and reports whether the main
+	// loop should trigger a sync. Runs in its own goroutine so the
+	// blocking HTTP call never holds up ctx.Done.
+	pollRemote := func() {
 		syncMu.Lock()
 		cursor := state.Cursor
 		syncMu.Unlock()
-		if cursor == "" {
-			return false, true, nil
-		}
-		resp, err := c.PollChanges(cursor)
-		if err == client.ErrCursorGone {
-			return false, true, nil
-		}
-		if err != nil {
-			return false, false, err
-		}
-		hasRemote := false
-		for _, ch := range resp.Changes {
-			if state.IsPushedSeq(ch.Seq) {
-				continue
+
+		needResync := cursor == ""
+		hasChanges := false
+		if !needResync {
+			resp, err := c.PollChanges(cursor)
+			if err == client.ErrCursorGone {
+				needResync = true
+			} else if err == nil {
+				for _, ch := range resp.Changes {
+					if !state.IsPushedSeq(ch.Seq) {
+						hasChanges = true
+						break
+					}
+				}
+				if len(resp.Changes) > 0 {
+					hasChanges = true
+				}
+			} else {
+				return
 			}
-			hasRemote = true
-			break
 		}
-		return hasRemote || len(resp.Changes) > 0, false, nil
+		if !hasChanges && !needResync {
+			return
+		}
+		// Nudge the main loop via localChanged; the existing debounce
+		// path runs the sync.
+		select {
+		case localChanged <- struct{}{}:
+		case <-ctx.Done():
+		}
 	}
 
 	syncFn := func() {
@@ -128,16 +142,7 @@ func (s *SyncService) run(ctx context.Context, c *client.Client, state *s2sync.S
 			debounceTimer = time.AfterFunc(s.debounce, syncFn)
 
 		case <-ticker.C:
-			hasChanges, needResync, err := pollFn()
-			if err != nil {
-				continue
-			}
-			if hasChanges || needResync {
-				if debounceTimer != nil {
-					debounceTimer.Stop()
-				}
-				go syncFn()
-			}
+			go pollRemote()
 		}
 	}
 }

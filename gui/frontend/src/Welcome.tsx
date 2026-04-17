@@ -6,6 +6,7 @@ import {
   SetSavedFolder,
   StartSync,
 } from "../wailsjs/go/main/App";
+import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
 
 interface Props {
   endpoint: string;
@@ -67,6 +68,19 @@ export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }:
             onKeyDown={(e) => e.key === "Enter" && connect()}
             autoFocus
           />
+          <p className="form-hint">
+            Don't have one?{" "}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                BrowserOpenURL(endpoint);
+              }}
+            >
+              Open S2 dashboard
+            </a>
+            {" "}and create a token.
+          </p>
         </div>
 
         <div className="form-group">

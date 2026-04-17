@@ -278,6 +278,13 @@
   color: var(--text-subtle);
   margin: 4px 0 0;
 }
+.form-hint a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.form-hint a:hover {
+  text-decoration: underline;
+}
 .folder-input {
   margin-bottom: 0;
   flex: 1;
