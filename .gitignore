@@ -6,3 +6,9 @@
 .idea/
 .vscode/
 *.swp
+
+# Wails GUI (gui/)
+gui/build/bin/
+gui/frontend/node_modules/
+gui/frontend/dist/
+gui/frontend/wailsjs/
