@@ -3,7 +3,6 @@ import {
   EnsureFolder,
   PickFolder,
   SaveToken,
-  SetSavedFolder,
   StartSync,
 } from "../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
@@ -38,7 +37,8 @@ export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }:
       const folderPath = folder || defaultFolder;
       await SaveToken(token);
       await EnsureFolder(folderPath);
-      await SetSavedFolder(folderPath);
+      // StartSync persists the folder internally, no need to call
+      // SetSavedFolder separately.
       await StartSync(folderPath);
       onConnected(folderPath);
     } catch (e: any) {
