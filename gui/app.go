@@ -104,10 +104,14 @@ func (a *App) ClearToken() error {
 	return auth.DeleteKeyring()
 }
 
-// PickFolder shows a native directory chooser.
+// PickFolder shows a native directory chooser. CanCreateDirectories
+// enables the "New Folder" button so users can create a sync root
+// from the dialog itself (otherwise the picker only browses existing
+// directories).
 func (a *App) PickFolder() (string, error) {
 	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: "Select folder to sync",
+		Title:                "Select folder to sync",
+		CanCreateDirectories: true,
 	})
 }
 
