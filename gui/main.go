@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"embed"
 
+	"fyne.io/systray"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -13,11 +15,15 @@ import (
 var assets embed.FS
 
 func main() {
-	// wails.Run must own the main thread on macOS — both because it
-	// blocks the binding-generation introspection step and because
-	// AppKit lives there. Tray runs in a goroutine launched from
-	// OnStartup, after Wails has initialized NSApplication.
 	app := NewApp()
+
+	// Register the systray BEFORE wails.Run. systray.Register is
+	// non-blocking on macOS 10.15+ — it sets up NSStatusItem callbacks
+	// and returns immediately, then relies on Wails' NSApplication run
+	// loop to dispatch target-actions. This sidesteps the
+	// main-thread-ownership conflict that systray.Run would cause.
+	systray.Register(func() { onTrayReady(app) }, func() {})
+
 	err := wails.Run(&options.App{
 		Title:             "s2sync",
 		Width:             520,
@@ -38,6 +44,9 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 		OnStartup:        app.startup,
+		OnShutdown: func(_ context.Context) {
+			systray.Quit()
+		},
 		Bind: []interface{}{
 			app,
 		},
