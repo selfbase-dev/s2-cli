@@ -18,7 +18,7 @@ jobs:
       matrix:
         include:
           - name: macos-arm64
-            runner: [self-hosted, macOS, arm64]
+            runner: macos-latest
             wails_tags: ""
           - name: windows-amd64
             runner: windows-latest
