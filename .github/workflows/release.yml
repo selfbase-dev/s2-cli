@@ -33,15 +33,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macos-arm64
+          - name: darwin_arm64
             runner: macos-latest
             wails_tags: ""
             archive_ext: zip
-          - name: windows-amd64
+          - name: windows_amd64
             runner: windows-latest
             wails_tags: ""
             archive_ext: zip
-          - name: linux-amd64
+          - name: linux_amd64
             runner: ubuntu-latest
             wails_tags: "webkit2_41"
             archive_ext: tar.gz
@@ -63,7 +63,7 @@ jobs:
           cache-dependency-path: gui/frontend/package-lock.json
 
       - name: Install Linux build deps
-        if: matrix.name == 'linux-amd64'
+        if: matrix.name == 'linux_amd64'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -124,5 +124,44 @@ jobs:
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" \
             "s2sync_${{ matrix.name }}.${{ matrix.archive_ext }}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+
+  checksums:
+    name: Aggregate checksums
+    needs: release-gui
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cd dist
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern 's2sync_*.zip' \
+            --pattern 's2sync_*.tar.gz' \
+            --pattern 'checksums.txt'
+
+      - name: Append GUI checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          # Compute sha256 for GUI artifacts and append to the goreleaser
+          # CLI checksums.txt. Format matches `sha256sum` so users can verify
+          # with `shasum -a 256 -c checksums.txt --ignore-missing`.
+          sha256sum s2sync_*.zip s2sync_*.tar.gz >> checksums.txt
+          echo "--- final checksums.txt ---"
+          cat checksums.txt
+
+      - name: Re-upload checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/checksums.txt \
             --repo "${GITHUB_REPOSITORY}" \
             --clobber
