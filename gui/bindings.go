@@ -24,9 +24,12 @@ func (a *App) HasToken() bool {
 	return err == nil && t != ""
 }
 
-// SaveToken validates against /api/me and stores a token in the system
-// keyring.
-func (a *App) SaveToken(token string) error {
+// ValidateToken checks format and calls /api/me without persisting.
+// Used by the onboarding Step 1 so that a validated-but-not-committed
+// token does not create persistent app state; only SaveToken commits
+// to the keyring once the user completes Step 2. Keeps the keyring
+// aligned with "onboarding complete" (which HasToken() reports on).
+func (a *App) ValidateToken(token string) error {
 	token = strings.TrimSpace(token)
 	if !strings.HasPrefix(token, "s2_") {
 		return fmt.Errorf("invalid token: must start with s2_")
@@ -35,7 +38,18 @@ func (a *App) SaveToken(token string) error {
 	if _, err := c.Me(); err != nil {
 		return fmt.Errorf("token validation failed: %w", err)
 	}
-	return auth.SetKeyring(token)
+	return nil
+}
+
+// SaveToken persists a token to the system keyring. Callers are
+// expected to have validated it via ValidateToken first; this method
+// still runs the same format + /api/me check defensively so older
+// paths (CLI login, future callers) stay safe.
+func (a *App) SaveToken(token string) error {
+	if err := a.ValidateToken(token); err != nil {
+		return err
+	}
+	return auth.SetKeyring(strings.TrimSpace(token))
 }
 
 // ClearToken stops any running sync and removes the stored token.
@@ -76,7 +90,10 @@ func (a *App) OpenFolder(path string) error {
 // EnsureFolder creates the directory if it doesn't exist (used during
 // first-run Connect to materialize the default `~/S2` placeholder).
 func (a *App) EnsureFolder(path string) error {
-	return os.MkdirAll(path, 0o755)
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return fmt.Errorf("could not create folder %q: %w", path, err)
+	}
+	return nil
 }
 
 // DefaultFolder returns the suggested folder shown as a placeholder

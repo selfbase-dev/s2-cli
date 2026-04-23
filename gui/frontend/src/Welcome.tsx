@@ -4,6 +4,7 @@ import {
   PickFolder,
   SaveToken,
   StartSync,
+  ValidateToken,
 } from "../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
 
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }: Props) {
+  const [step, setStep] = useState<1 | 2>(1);
   const [token, setToken] = useState("");
   const [folder, setFolder] = useState(initialFolder);
   const [error, setError] = useState("");
@@ -29,16 +31,31 @@ export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }:
     if (f) setFolder(f);
   };
 
-  const connect = async () => {
+  const validateToken = async () => {
     if (!token || busy) return;
+    setError("");
+    setBusy(true);
+    try {
+      await ValidateToken(token);
+      setStep(2);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step 2 Connect: persist the token only now that the user has
+  // committed to a folder. Keeps keyring / HasToken() aligned with
+  // "onboarding complete" so closing mid-flow leaves no state behind.
+  const connect = async () => {
+    if (busy) return;
     setError("");
     setBusy(true);
     try {
       const folderPath = folder || defaultFolder;
       await SaveToken(token);
       await EnsureFolder(folderPath);
-      // StartSync persists the folder internally, no need to call
-      // SetSavedFolder separately.
       await StartSync(folderPath);
       onConnected(folderPath);
     } catch (e: any) {
@@ -52,65 +69,98 @@ export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }:
     <div className="signin">
       <div className="signin-card">
         <div className="brand-mark">S2</div>
-        <h2>Welcome to s2sync</h2>
-        <p className="signin-help">
-          Sync a folder with S2. Get an API token from your S2 dashboard.
-        </p>
+        <h2>Welcome to S2 Sync</h2>
 
-        <div className="form-group">
-          <label className="form-label">Token</label>
-          <input
-            type="password"
-            className="token-input"
-            placeholder="s2_..."
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && connect()}
-            autoFocus
-          />
-          <p className="form-hint">
-            Don't have one?{" "}
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                BrowserOpenURL(endpoint);
-              }}
+        <ol className="signin-steps" aria-label="Onboarding progress">
+          <li className={step === 1 ? "current" : "done"}>1. Token</li>
+          <li className={step === 2 ? "current" : ""}>2. Folder</li>
+        </ol>
+
+        {step === 1 ? (
+          <>
+            <p className="signin-help">
+              Paste your S2 API token to connect. We'll confirm your scope before picking a folder.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Token</label>
+              <input
+                type="password"
+                className="token-input"
+                placeholder="s2_..."
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && validateToken()}
+                autoFocus
+              />
+            </div>
+
+            <button
+              className="btn primary connect-btn"
+              onClick={validateToken}
+              disabled={!token || busy}
             >
-              Open S2 dashboard
-            </a>
-            {" "}and create a token.
-          </p>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Folder</label>
-          <div className="folder-row">
-            <input
-              type="text"
-              className="token-input folder-input"
-              placeholder={defaultFolder}
-              value={folder}
-              onChange={(e) => setFolder(e.target.value)}
-            />
-            <button className="btn" onClick={pickFolder} disabled={busy}>
-              Choose…
+              {busy ? "Checking…" : "Next"}
             </button>
-          </div>
-          <p className="form-hint">
-            Files in this folder will sync. Created if it doesn't exist.
-          </p>
-        </div>
 
-        <button
-          className="btn primary connect-btn"
-          onClick={connect}
-          disabled={!token || busy}
-        >
-          {busy ? "Connecting…" : "Connect & start sync"}
-        </button>
-        {error && <div className="error-banner">{error}</div>}
-        <p className="signin-endpoint">{endpoint}</p>
+            <button
+              type="button"
+              className="btn link-btn"
+              onClick={() => BrowserOpenURL(endpoint)}
+            >
+              Don't have a token? Open S2 dashboard →
+            </button>
+
+            {error && <div className="error-banner">{error}</div>}
+            <p className="signin-endpoint">{endpoint}</p>
+          </>
+        ) : (
+          <>
+            <p className="signin-help">Token validated. Choose which local folder to sync.</p>
+
+            <div className="form-group">
+              <label className="form-label">Folder</label>
+              <div className="folder-row">
+                <input
+                  type="text"
+                  className="token-input folder-input"
+                  placeholder={defaultFolder}
+                  value={folder}
+                  onChange={(e) => setFolder(e.target.value)}
+                />
+                <button className="btn" onClick={pickFolder} disabled={busy}>
+                  Choose…
+                </button>
+              </div>
+              <p className="form-hint">
+                Files in this folder will sync. Created if it doesn't exist.
+              </p>
+            </div>
+
+            <button
+              className="btn primary connect-btn"
+              onClick={connect}
+              disabled={busy}
+            >
+              {busy ? "Connecting…" : "Connect & start sync"}
+            </button>
+
+            <button
+              type="button"
+              className="btn link-btn"
+              onClick={() => {
+                setStep(1);
+                setError("");
+              }}
+              disabled={busy}
+            >
+              ← Use a different token
+            </button>
+
+            {error && <div className="error-banner">{error}</div>}
+            <p className="signin-endpoint">{endpoint}</p>
+          </>
+        )}
       </div>
     </div>
   );

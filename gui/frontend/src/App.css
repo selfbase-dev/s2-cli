@@ -297,3 +297,46 @@
   margin: 14px 0 0;
   text-align: center;
 }
+
+.signin-steps {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+.signin-steps li {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg-muted);
+}
+.signin-steps li.current {
+  background: var(--primary);
+  color: #fff;
+}
+.signin-steps li.done {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+.link-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  padding: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+.link-btn:disabled {
+  color: var(--text-subtle);
+  cursor: default;
+  text-decoration: none;
+}
