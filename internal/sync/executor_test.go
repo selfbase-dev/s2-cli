@@ -21,6 +21,51 @@ func testServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *clie
 	return srv, client.New(srv.URL, "s2_test")
 }
 
+// Regression for SELF-444: remotePrefix without trailing slash must still
+// produce a properly separated remote key.
+func TestExecute_Push_RemoteKeyJoin(t *testing.T) {
+	cases := []struct {
+		name     string
+		prefix   string
+		planPath string
+		wantURL  string
+	}{
+		{"no trailing slash, top-level file", "agents", "README.md", "/api/files/agents/README.md"},
+		{"no trailing slash, nested file", "agents", "agents/MEMORY.md", "/api/files/agents/agents/MEMORY.md"},
+		{"trailing slash", "agents/", "README.md", "/api/files/agents/README.md"},
+		{"empty prefix", "", "README.md", "/api/files/README.md"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotURL string
+			_, c := testServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "PUT" {
+					gotURL = r.URL.Path
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(201)
+					json.NewEncoder(w).Encode(map[string]any{
+						"id": "n1", "name": "f", "size": 1,
+						"hash": "h", "content_version": int64(1),
+					})
+				}
+			})
+
+			localDir := t.TempDir()
+			localPath := filepath.Join(localDir, tc.planPath)
+			os.MkdirAll(filepath.Dir(localPath), 0755)
+			os.WriteFile(localPath, []byte("x"), 0644)
+
+			state := testStateFromArchive(nil)
+			plans := []types.SyncPlan{{Path: tc.planPath, Action: types.Push}}
+			Execute(plans, localDir, tc.prefix, c, state, false)
+
+			if gotURL != tc.wantURL {
+				t.Errorf("URL.Path = %q, want %q", gotURL, tc.wantURL)
+			}
+		})
+	}
+}
+
 func TestExecute_Push(t *testing.T) {
 	var uploadedBody string
 	var gotIfNoneMatch string

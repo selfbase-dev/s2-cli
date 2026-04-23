@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/selfbase-dev/s2-sync/internal/client"
 	"github.com/selfbase-dev/s2-sync/internal/types"
@@ -53,7 +54,7 @@ func execute(
 			result.Errors = append(result.Errors, fmt.Errorf("unsafe plan path %s: %w", plan.Path, err))
 			continue
 		}
-		remoteKey := remotePrefix + plan.Path
+		remoteKey := path.Join(remotePrefix, plan.Path)
 
 		switch plan.Action {
 		case types.Push:
