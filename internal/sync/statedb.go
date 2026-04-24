@@ -16,9 +16,9 @@ import (
 // .s2/state.db triggers a full reset (quarantine + recreate), per the
 // "state.db is a cache" policy.
 //
-// v2 (ADR 0053): adds collision_keys to state_meta for warning
-// debounce. Archive rows pre-ADR-0053 may have non-NFC paths, so
-// bumping also forces a clean rescan on upgrade.
+// v2: adds collision_keys to state_meta for warning debounce. The
+// bump also forces a clean rescan on upgrade, so legacy archive rows
+// with pre-normalized paths are rebuilt to the NFC canonical form.
 const schemaVersion = 2
 
 const schemaSQL = `

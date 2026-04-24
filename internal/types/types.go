@@ -38,9 +38,9 @@ const (
 	DeleteRemote
 	Conflict
 	PreserveLocalRename
-	Move             // push side: atomic server MOVE from From→Path (ADR 0053)
+	Move             // push side: atomic server MOVE from From→Path
 	MoveApply        // pull side: server already moved, apply locally (os.Rename)
-	SkipCaseConflict // terminal: file skipped due to case/unicode collision (ADR 0053)
+	SkipCaseConflict // terminal: file skipped due to case/unicode collision
 )
 
 func (a SyncAction) String() string {

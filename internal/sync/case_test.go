@@ -32,7 +32,7 @@ func TestNormalizePath(t *testing.T) {
 }
 
 func TestNormalizePath_Idempotent(t *testing.T) {
-	// NFC(NFC(x)) == NFC(x) — critical for key concept 5 (deterministic convergence)
+	// NFC(NFC(x)) == NFC(x) — critical for stable re-sync
 	inputs := []string{
 		"file.txt",
 		"/ファイル.txt",
@@ -277,13 +277,13 @@ func TestMergeCaseOnlyRenames_NoMerge_HashDiffers(t *testing.T) {
 	}
 }
 
-func TestNeutralize_CaseInsensitive(t *testing.T) {
+func TestNeutralize_PlanVsPlan_CaseInsensitive(t *testing.T) {
 	plans := []types.SyncPlan{
 		{Path: "File.txt", Action: types.Push},
 		{Path: "file.txt", Action: types.Pull},
 		{Path: "other.txt", Action: types.Push},
 	}
-	out := NeutralizeLocalRemoteCaseCollisions(plans, true)
+	out := NeutralizeLocalRemoteCaseCollisions(plans, nil, nil, true)
 	var skipCount int
 	for _, p := range out {
 		if p.Action == types.SkipCaseConflict {
@@ -295,13 +295,52 @@ func TestNeutralize_CaseInsensitive(t *testing.T) {
 	}
 }
 
+// Regression: Pull on a path whose FoldKey collides with an existing
+// LOCAL file (not in plans) must be neutralized — otherwise the Pull
+// overwrites the local's inode on case-insensitive FS.
+func TestNeutralize_PullVsExistingLocal(t *testing.T) {
+	plans := []types.SyncPlan{
+		{Path: "File.txt", Action: types.Pull},
+	}
+	local := map[string]types.LocalFile{"file.txt": {Hash: "h"}}
+	out := NeutralizeLocalRemoteCaseCollisions(plans, local, nil, true)
+	if out[0].Action != types.SkipCaseConflict {
+		t.Errorf("expected SkipCaseConflict, got %v", out[0].Action)
+	}
+}
+
+// Push for an exact-match existing local path is NOT a collision.
+func TestNeutralize_PushOfExactMatch_Allowed(t *testing.T) {
+	plans := []types.SyncPlan{
+		{Path: "file.txt", Action: types.Push},
+	}
+	local := map[string]types.LocalFile{"file.txt": {Hash: "h"}}
+	out := NeutralizeLocalRemoteCaseCollisions(plans, local, nil, true)
+	if out[0].Action != types.Push {
+		t.Errorf("exact-match push should stay Push, got %v", out[0].Action)
+	}
+}
+
+// Move for a path whose FoldKey collides with the source (because we
+// are renaming into that slot) must NOT be neutralized.
+func TestNeutralize_MoveIsAllowed(t *testing.T) {
+	plans := []types.SyncPlan{
+		{Path: "File.txt", From: "file.txt", Action: types.Move, Hash: "h"},
+	}
+	local := map[string]types.LocalFile{"File.txt": {Hash: "h"}}
+	archive := map[string]types.FileState{"file.txt": {LocalHash: "h"}}
+	out := NeutralizeLocalRemoteCaseCollisions(plans, local, archive, true)
+	if out[0].Action != types.Move {
+		t.Errorf("Move should not be neutralized, got %v", out[0].Action)
+	}
+}
+
 func TestNeutralize_CaseSensitive_NoOp(t *testing.T) {
 	plans := []types.SyncPlan{
 		{Path: "File.txt", Action: types.Push},
 		{Path: "file.txt", Action: types.Pull},
 	}
-	out := NeutralizeLocalRemoteCaseCollisions(plans, false)
-	// Case-sensitive FS → both paths can coexist, no neutralization
+	out := NeutralizeLocalRemoteCaseCollisions(plans, nil, nil, false)
 	if out[0].Action != types.Push || out[1].Action != types.Pull {
 		t.Errorf("expected no changes on case-sensitive FS: %+v", out)
 	}

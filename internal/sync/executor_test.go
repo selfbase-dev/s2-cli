@@ -330,14 +330,14 @@ func TestExecute_Move_409_FallsBackToSkip(t *testing.T) {
 	if result.Skipped != 1 {
 		t.Errorf("skipped = %d, want 1 on 409", result.Skipped)
 	}
-	// Archive MUST retain original — ADR 0053: no delete+push fallback
+	// Archive MUST retain original — no delete+push fallback
 	if _, ok := state.Files["file.txt"]; !ok {
 		t.Error("archive should keep original file.txt after 409 (no destructive fallback)")
 	}
 }
 
 func TestExecute_MoveApply_PreservesInode(t *testing.T) {
-	// ADR 0053: pull-side file move must apply os.Rename, not
+	// pull-side file move must apply os.Rename, not
 	// decompose into delete+download — essential for case-only
 	// renames on case-insensitive FS.
 	_, c := testServer(t, func(w http.ResponseWriter, r *http.Request) {

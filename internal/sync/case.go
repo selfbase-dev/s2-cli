@@ -1,4 +1,4 @@
-// Package sync: case-sensitivity and Unicode normalization (ADR 0053).
+// Package sync: case-sensitivity and Unicode normalization.
 //
 // All logic for absorbing OS-level differences in filename handling
 // (macOS NFD vs NFC, case-insensitive vs case-sensitive filesystems,
@@ -8,11 +8,10 @@
 // via existing I/O layers.
 //
 // Functions here are pure — no I/O, no state. Side effects live in the
-// walk / executor layers (see ADR 0053 "検出は pure、I/O は executor").
+// walk / executor layers — keep detection and I/O separate.
 package sync
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -44,7 +43,7 @@ func NormalizePath(p string) string {
 //
 // Limitation: strings.ToLower uses simple Unicode case mapping.
 // Locale-specific folds (Turkish dotless-I, Greek final sigma) may miss
-// detection — acceptable tradeoff per ADR 0053 (fallback is delete+create
+// detection — acceptable tradeoff (fallback is delete+create
 // which is correct, just wasteful).
 func FoldKey(p string) string {
 	return strings.ToLower(NormalizePath(p))
@@ -52,11 +51,11 @@ func FoldKey(p string) string {
 
 // DetectCollisions groups paths by FoldKey. Groups with >1 member are
 // collisions that the caller must handle (typically skip + warning
-// per ADR 0053, not stop the whole sync).
+//, not stop the whole sync).
 //
 // Returned paths are NormalizePath-canonical and sorted UTF-8 bytewise
 // lexicographic within each group — this determinism is what makes
-// tie-break stable across devices and invocations (ADR 0053 key concept 5).
+// tie-break stable across devices and invocations (deterministic tie-break).
 func DetectCollisions(paths []string) map[string][]string {
 	groups := make(map[string][]string)
 	for _, p := range paths {
@@ -128,55 +127,9 @@ func DetectMovePairs(local, archive map[string]string) []MoveCandidate {
 	return pairs
 }
 
-// IsCaseInsensitiveFS probes dir by creating a temp file and checking
-// whether it's reachable under a different-case filename. Returns true
-// on Mac/Windows case-insensitive filesystems, false on Linux and on
-// case-sensitive macOS APFS / WSL mounts.
-//
-// If probing fails (permission, etc.) returns false — treating FS as
-// case-sensitive means we don't over-filter, and walk's own collision
-// detection still catches the actual local-collision scenarios that
-// would break sync.
-func IsCaseInsensitiveFS(dir string) bool {
-	f, err := os.CreateTemp(dir, ".s2caseprobe-*")
-	if err != nil {
-		return false
-	}
-	name := f.Name()
-	f.Close()
-	defer os.Remove(name)
-
-	// Flip the case of the probe filename and try to open it.
-	base := filepath.Base(name)
-	flipped := flipCase(base)
-	if flipped == base {
-		return false
-	}
-	altPath := filepath.Join(filepath.Dir(name), flipped)
-	if _, err := os.Stat(altPath); err == nil {
-		return true
-	}
-	return false
-}
-
-func flipCase(s string) string {
-	runes := []rune(s)
-	for i, r := range runes {
-		switch {
-		case r >= 'a' && r <= 'z':
-			runes[i] = r - ('a' - 'A')
-			return string(runes)
-		case r >= 'A' && r <= 'Z':
-			runes[i] = r + ('a' - 'A')
-			return string(runes)
-		}
-	}
-	return s
-}
-
 // NormalizeRemoteMap canonicalizes remote map keys (NFC) and, on
 // case-insensitive local FS, collapses case collisions — keeping the
-// lexicographic-first path (deterministic tie-break per ADR 0053 key
+// lexicographic-first path (deterministic tie-break key
 // concept 5). The losers are returned as CollisionGroups for reporting
 // and emission as SkipCaseConflict plans.
 //
@@ -245,7 +198,7 @@ func parseCollisionKeys(s string) []string {
 }
 
 // uniqSorted returns a deduplicated, sorted copy of keys (UTF-8
-// bytewise, stable per ADR 0053 tie-break rule).
+// bytewise, stable tie-break rule).
 func uniqSorted(keys []string) []string {
 	if len(keys) == 0 {
 		return nil
@@ -343,34 +296,111 @@ func MergeCaseOnlyRenames(
 	return out
 }
 
-// NeutralizeLocalRemoteCaseCollisions scans plans for Push/Pull/Conflict
-// pairs whose paths fold to the same canonical key and replaces them
-// with SkipCaseConflict. This prevents a Pull from overwriting a local
-// file that case-folds to the same name on a case-insensitive FS
-// (ADR 0053 key concept 2: integrity first).
+// NeutralizeLocalRemoteCaseCollisions replaces plans whose paths
+// fold-collide with a different existing local/archive path (or with
+// another plan) by SkipCaseConflict. This protects integrity on
+// case-insensitive filesystems where pulling `File.txt` would
+// silently overwrite an existing `file.txt` (same inode).
 //
-// Only active when caseInsensitive is true — on case-sensitive FS,
-// colliding-by-canonical but distinct-by-exact paths can legitimately
-// coexist.
+// A Push for an exact existing path is NOT a collision — we check
+// the FoldKey bucket only when the exact paths differ.
+//
+// Only active when caseInsensitive is true. On case-sensitive FS,
+// distinct exact paths can coexist.
 func NeutralizeLocalRemoteCaseCollisions(
 	plans []types.SyncPlan,
+	local map[string]types.LocalFile,
+	archive map[string]types.FileState,
 	caseInsensitive bool,
 ) []types.SyncPlan {
 	if !caseInsensitive {
 		return plans
 	}
-	// Group plan indices by FoldKey
+	// foldKey → set of exact paths that already exist on disk or in
+	// the archive (pre-sync state). Plans that target a different
+	// exact path within the same bucket are unsafe.
+	existing := make(map[string]map[string]struct{})
+	add := func(p string) {
+		key := FoldKey(p)
+		if _, ok := existing[key]; !ok {
+			existing[key] = make(map[string]struct{})
+		}
+		existing[key][NormalizePath(p)] = struct{}{}
+	}
+	for p := range local {
+		add(p)
+	}
+	for p := range archive {
+		add(p)
+	}
+
+	// Move / MoveApply are the resolution to a case collision, not
+	// a new one — don't second-guess them. Same for SkipCaseConflict.
+	// We neutralize only actions that would touch a case-insensitive
+	// slot currently owned by a different exact path.
+	vulnerable := func(a types.SyncAction) bool {
+		switch a {
+		case types.Push, types.Pull, types.DeleteLocal, types.DeleteRemote, types.Conflict:
+			return true
+		}
+		return false
+	}
+
+	// Also track which exact paths the current plans intend to
+	// remove, so a Push into a slot being freed by the same batch
+	// is allowed through.
+	removedByPlans := make(map[string]struct{})
+	for _, p := range plans {
+		switch p.Action {
+		case types.DeleteLocal, types.DeleteRemote:
+			removedByPlans[NormalizePath(p.Path)] = struct{}{}
+		case types.Move, types.MoveApply:
+			removedByPlans[NormalizePath(p.From)] = struct{}{}
+		}
+	}
+
 	byFold := make(map[string][]int)
 	for i, p := range plans {
 		byFold[FoldKey(p.Path)] = append(byFold[FoldKey(p.Path)], i)
 	}
 	toSkip := make(map[int]bool)
-	for _, idxs := range byFold {
-		if len(idxs) <= 1 {
+	for key, idxs := range byFold {
+		// Plan-vs-plan: >1 vulnerable plans targeting the same slot.
+		vulnIdx := make([]int, 0, len(idxs))
+		for _, idx := range idxs {
+			if vulnerable(plans[idx].Action) {
+				vulnIdx = append(vulnIdx, idx)
+			}
+		}
+		if len(vulnIdx) > 1 {
+			for _, idx := range vulnIdx {
+				toSkip[idx] = true
+			}
+		}
+
+		// Plan-vs-existing: vulnerable plan targets a slot already
+		// occupied by a different exact path that is NOT being
+		// removed by this batch.
+		others, has := existing[key]
+		if !has {
 			continue
 		}
-		for _, idx := range idxs {
-			toSkip[idx] = true
+		for _, idx := range vulnIdx {
+			planPath := NormalizePath(plans[idx].Path)
+			conflict := false
+			for other := range others {
+				if other == planPath {
+					continue
+				}
+				if _, removed := removedByPlans[other]; removed {
+					continue
+				}
+				conflict = true
+				break
+			}
+			if conflict {
+				toSkip[idx] = true
+			}
 		}
 	}
 	if len(toSkip) == 0 {

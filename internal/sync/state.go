@@ -43,10 +43,10 @@ type State struct {
 	// Cursor is the remote change-log position.
 	Cursor string
 
-	// ReportedCollisions is the set of FoldKeys for collisions that were
-	// already warned about in a previous sync. Compared against the
-	// current sync's collisions to suppress repeated warnings (ADR 0053
-	// key concept 5: deterministic + debounced logging). Sorted, unique.
+	// ReportedCollisions is the set of FoldKeys for collisions that
+	// were already warned about in a previous sync. Compared against
+	// the current sync's collisions to suppress repeated warnings.
+	// Sorted, unique.
 	ReportedCollisions []string
 
 	pushedSeqs map[int64]struct{}
@@ -334,7 +334,7 @@ func (s *State) ClearFiles() {
 // SetReportedCollisions replaces the debounce set with keys, deduped
 // and sorted. Returns the newly-appeared and newly-resolved keys
 // relative to the previous value, so the caller can log only the diff
-// (ADR 0053: warning is debounced; same collision does not re-log).
+//: warning is debounced; same collision does not re-log).
 // Save writes state_meta unconditionally, so no dirty flag needed.
 func (s *State) SetReportedCollisions(keys []string) (added, resolved []string) {
 	s.mu.Lock()

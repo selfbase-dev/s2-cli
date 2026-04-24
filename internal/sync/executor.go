@@ -151,7 +151,7 @@ func execute(
 		case types.Move:
 			// Case-only rename detected by MergeCaseOnlyRenames.
 			// plan.From = archive/remote source, plan.Path = destination.
-			// Atomic server MOVE preserves revision history (ADR 0053).
+			// Atomic server MOVE preserves revision history.
 			if dryRun {
 				fmt.Printf("[dry-run] move: %s → %s\n", plan.From, plan.Path)
 				result.Moved++
@@ -161,7 +161,7 @@ func execute(
 			moveResult, err := c.Move(srcKey, remoteKey)
 			if err != nil {
 				if errors.Is(err, client.ErrMoveConflict) {
-					// ADR 0053: destination exists → treat as SkipCaseConflict,
+					// destination exists → treat as SkipCaseConflict,
 					// not delete+push fallback. Leave archive pointing at From
 					// so we keep tracking the source; the user must resolve.
 					result.Skipped++
@@ -185,7 +185,7 @@ func execute(
 			fmt.Printf("moved: %s → %s\n", plan.From, plan.Path)
 
 		case types.MoveApply:
-			// Pull side of a case-only rename / file move (ADR 0053).
+			// Pull side of a case-only rename / file move.
 			// Server already moved; we apply os.Rename locally to
 			// preserve the inode — critical for case-only renames on
 			// case-insensitive FS (Mac/Win) where delete+download of
@@ -213,7 +213,7 @@ func execute(
 			fmt.Printf("move-apply: %s → %s\n", plan.From, plan.Path)
 
 		case types.SkipCaseConflict:
-			// ADR 0053: terminal state — do not touch local or remote.
+			// terminal state — do not touch local or remote.
 			// Leave archive alone so the collision is re-detected next
 			// sync (warning debounce in state prevents log spam).
 			if dryRun {

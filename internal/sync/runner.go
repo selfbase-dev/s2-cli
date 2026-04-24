@@ -55,7 +55,7 @@ func RunInitialSync(c *client.Client, localDir, remotePrefix string, state *Stat
 
 	plans := Compare(localFiles, remoteFiles, state.Files)
 	plans = MergeCaseOnlyRenames(plans, localFiles, state.Files)
-	plans = NeutralizeLocalRemoteCaseCollisions(plans, caseInsensitive)
+	plans = NeutralizeLocalRemoteCaseCollisions(plans, localFiles, state.Files, caseInsensitive)
 
 	result, err := executePlans(plans, localDir, remotePrefix, c, state, opts)
 	if err != nil {
@@ -137,7 +137,7 @@ func RunIncrementalSync(c *client.Client, localDir, remotePrefix string, state *
 	fileLevelPlans := CompareIncremental(localFiles, state.Files, fileChanges)
 	plans := MergePlansByPath(fileLevelPlans, subtreePlans, dirOutcome.ArchiveWalkPlans)
 	plans = MergeCaseOnlyRenames(plans, localFiles, state.Files)
-	plans = NeutralizeLocalRemoteCaseCollisions(plans, caseInsensitive)
+	plans = NeutralizeLocalRemoteCaseCollisions(plans, localFiles, state.Files, caseInsensitive)
 
 	hasLocalChanges := HasLocalChanges(localFiles, state.Files)
 
@@ -187,7 +187,7 @@ func collectCollisions(groups ...[]CollisionGroup) []CollisionGroup {
 
 // reportCollisions applies debounce: only logs groups whose FoldKey was
 // not in state.ReportedCollisions, and logs "resolved: X" for keys that
-// dropped out since the last sync (ADR 0053 key concept 5: warnings
+// dropped out since the last sync (deterministic tie-break: warnings
 // happen on state transitions only).
 func reportCollisions(groups []CollisionGroup, state *State, opts SyncOptions) {
 	keys := make([]string, 0, len(groups))

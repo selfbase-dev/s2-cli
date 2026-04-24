@@ -253,7 +253,7 @@ func (c *Client) Delete(path string) (*types.DeleteResult, error) {
 
 // ErrMoveConflict is returned when POST /api/file-moves returns 409
 // (destination already exists or cycle detected). Callers should treat
-// this as SkipCaseConflict per ADR 0053 — do NOT fall back to
+// this as SkipCaseConflict per the collision policy — do NOT fall back to
 // delete+push, which is not atomic and can lose data.
 var ErrMoveConflict = fmt.Errorf("move conflict: destination exists or cycle")
 

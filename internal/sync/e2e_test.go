@@ -247,7 +247,7 @@ func (e *testEnv) initialSync(state *State) *ExecuteResult {
 
 	plans := Compare(localFiles, remoteFiles, state.Files)
 	plans = MergeCaseOnlyRenames(plans, localFiles, state.Files)
-	plans = NeutralizeLocalRemoteCaseCollisions(plans, caseInsensitive)
+	plans = NeutralizeLocalRemoteCaseCollisions(plans, localFiles, state.Files, caseInsensitive)
 	result, err := Execute(plans, e.localDir, "", e.client, state, false)
 	if err != nil {
 		e.t.Fatalf("Execute: %v", err)
@@ -331,7 +331,7 @@ func (e *testEnv) incrementalSync(state *State) *ExecuteResult {
 		dirOutcome.ArchiveWalkPlans,
 	)
 	plans = MergeCaseOnlyRenames(plans, localFiles, state.Files)
-	plans = NeutralizeLocalRemoteCaseCollisions(plans, caseInsensitive)
+	plans = NeutralizeLocalRemoteCaseCollisions(plans, localFiles, state.Files, caseInsensitive)
 
 	result, err := Execute(plans, e.localDir, "", e.client, state, false)
 	if err != nil {
@@ -932,7 +932,7 @@ func TestScoped_S22_AncestorMoveBecomesDelete(t *testing.T) {
 	}
 }
 
-// --- ADR 0053: case-sensitivity and Unicode normalization ---
+// --- case-sensitivity and Unicode normalization ---
 
 // On macOS the literal "à.txt" lands on disk as NFD ("a" + U+0300).
 // After sync, the server side must see the NFC form so Linux/Windows

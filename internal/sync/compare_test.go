@@ -219,7 +219,7 @@ func TestCompareIncremental(t *testing.T) {
 			want:    map[string]types.SyncAction{"a.txt": types.Conflict},
 		},
 		{
-			// ADR 0053: file moves are preserved as a single MoveApply
+			// file moves are preserved as a single MoveApply
 			// plan (executed via os.Rename). Decomposing to delete+put
 			// would corrupt case-only renames on case-insensitive FS.
 			name:    "remote move → move-apply at new (preserves inode)",

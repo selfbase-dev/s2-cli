@@ -13,7 +13,7 @@ import (
 )
 
 // CollisionGroup describes a set of paths that fold to the same
-// canonical key (per ADR 0053). On case-insensitive filesystems they
+// canonical key (per the collision policy). On case-insensitive filesystems they
 // can't coexist, so only Paths[0] (lexicographic first) is included
 // in the sync set; the rest get SkipCaseConflict and warning.
 type CollisionGroup struct {
@@ -27,13 +27,13 @@ type WalkResult struct {
 	// the lexicographic-first path is present.
 	Files map[string]types.LocalFile
 	// Collisions lists any groups where multiple on-disk paths folded
-	// to the same canonical key (ADR 0053 key concept 4: sync does not
+	// to the same canonical key(sync must not
 	// stop, caller emits warnings).
 	Collisions []CollisionGroup
 }
 
 // Walk recursively scans the local directory. Paths are NFC-normalized
-// (ADR 0053 key concept 5: idempotent convergence across macOS NFD and
+// (deterministic tie-break: idempotent convergence across macOS NFD and
 // other-OS NFC). If archive is provided, files whose modtime and size
 // match are reused without rehashing (like rsync).
 //

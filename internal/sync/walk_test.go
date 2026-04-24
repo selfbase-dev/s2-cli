@@ -110,7 +110,7 @@ func TestWalk_ForwardSlashPaths(t *testing.T) {
 	}
 }
 
-// ADR 0053: local walk must NFC-normalize paths so macOS NFD and
+// local walk must NFC-normalize paths so macOS NFD and
 // other-OS NFC converge to the same archive key.
 func TestWalk_NFCNormalizes(t *testing.T) {
 	dir := t.TempDir()
@@ -133,7 +133,7 @@ func TestWalk_NFCNormalizes(t *testing.T) {
 	}
 }
 
-// ADR 0053: local collision (e.g. case-sensitive FS with File.txt +
+// local collision (e.g. case-sensitive FS with File.txt +
 // file.txt) must be detected and reported, not silently drop one.
 func TestWalk_LocalCollision(t *testing.T) {
 	dir := t.TempDir()
