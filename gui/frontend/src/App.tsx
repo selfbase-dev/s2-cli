@@ -7,8 +7,6 @@ import {
   GetStatus,
   HasValidSession,
   IsAutostartEnabled,
-  LogFile,
-  OpenLogFile,
   PickFolder,
   RecentLogs,
   SavedFolder,
@@ -30,14 +28,12 @@ function App() {
   const [defaultFolder, setDefaultFolder] = useState("");
   const [state, setState] = useState<StateInfo>({ status: "idle" });
   const [logs, setLogs] = useState<LogRecord[]>([]);
-  const [logFile, setLogFilePath] = useState("");
   const [autostart, setAutostartState] = useState(false);
 
   useEffect(() => {
     Endpoint().then(setEndpoint);
     DefaultFolder().then(setDefaultFolder);
     IsAutostartEnabled().then(setAutostartState);
-    LogFile().then(setLogFilePath);
     Promise.all([HasValidSession(), SavedFolder()]).then(([ok, saved]) => {
       setSignedIn(ok);
       if (saved) setFolder(saved);
@@ -139,15 +135,12 @@ function App() {
       folder={folder}
       state={state}
       logs={logs}
-      logFile={logFile}
       autostart={autostart}
       onStart={handleStart}
       onStop={handleStop}
       onPickFolder={handlePickFolder}
       onAutostartChange={handleAutostart}
       onDisconnect={handleDisconnect}
-      onClearLogs={() => setLogs([])}
-      onOpenLogFile={() => OpenLogFile()}
     />
   );
 }

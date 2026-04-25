@@ -27,15 +27,3 @@ export const STATUS_LABEL: Record<Status, string> = {
   stopping: "Stopping…",
   error: "Error",
 };
-
-// Event prefixes the Logs panel uses for color/group filters. Keep in
-// sync with internal/log/events.go.
-export const EVENT_GROUPS = ["sync", "file", "watch", "service", "oauth"] as const;
-export type EventGroup = (typeof EVENT_GROUPS)[number];
-
-export function eventGroup(event: string): EventGroup | "other" {
-  const prefix = event.split(".")[0];
-  return (EVENT_GROUPS as readonly string[]).includes(prefix)
-    ? (prefix as EventGroup)
-    : "other";
-}
