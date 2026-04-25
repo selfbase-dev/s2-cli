@@ -291,6 +291,39 @@
   min-width: 0;
 }
 .connect-btn { width: 100%; padding: 9px; font-size: 14px; margin-top: 4px; }
+
+.signin-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 6px;
+}
+.signin-waiting-text {
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+.signin-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-top-color: var(--accent, #2563eb);
+  border-radius: 50%;
+  animation: signin-spin 0.8s linear infinite;
+}
+@keyframes signin-spin { to { transform: rotate(360deg); } }
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent, #2563eb);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link-btn:hover { opacity: 0.85; }
+.signin-cancel { color: var(--text-subtle); }
 .signin-endpoint {
   font-size: 11px;
   color: var(--text-subtle);
