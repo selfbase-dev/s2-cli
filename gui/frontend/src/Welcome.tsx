@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  CancelOAuthLogin,
   EnsureFolder,
   PickFolder,
   StartOAuthLogin,
@@ -36,10 +37,16 @@ export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }:
       await StartOAuthLogin();
       setStep(2);
     } catch (e: any) {
-      setError(String(e?.message ?? e));
+      const msg = String(e?.message ?? e);
+      // Cancelled-by-user is not an error worth surfacing.
+      if (!/context canceled/i.test(msg)) setError(msg);
     } finally {
       setBusy(false);
     }
+  };
+
+  const cancelSignIn = async () => {
+    await CancelOAuthLogin();
   };
 
   const connect = async () => {
@@ -75,13 +82,28 @@ export function Welcome({ endpoint, defaultFolder, initialFolder, onConnected }:
               Sign in to your S2 account. Your browser will open to complete consent, then you'll be brought back here.
             </p>
 
-            <button
-              className="btn primary connect-btn"
-              onClick={signIn}
-              disabled={busy}
-            >
-              {busy ? "Waiting for browser…" : "Sign in with S2"}
-            </button>
+            {busy ? (
+              <div className="signin-waiting" role="status" aria-live="polite">
+                <span className="signin-spinner" aria-hidden="true" />
+                <span className="signin-waiting-text">
+                  Complete sign-in in your browser…
+                </span>
+                <button
+                  type="button"
+                  className="link-btn signin-cancel"
+                  onClick={cancelSignIn}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                className="btn primary connect-btn"
+                onClick={signIn}
+              >
+                Sign in with S2
+              </button>
+            )}
 
             {error && <div className="error-banner">{error}</div>}
             <p className="signin-endpoint">{endpoint}</p>

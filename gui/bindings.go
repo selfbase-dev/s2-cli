@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -28,10 +29,28 @@ func (a *App) HasValidSession() bool {
 // StartOAuthLogin runs the full Authorization Code + PKCE + loopback
 // flow: opens the system browser, waits for the redirect on a private
 // loopback port, exchanges the code at /oauth/token, and persists the
-// resulting session. Blocks until the user completes consent (or
-// cancels in the browser, or the 5-minute default timeout fires).
+// resulting session. Blocks until the user completes consent, cancels
+// in the browser, the 5-minute default timeout fires, or
+// CancelOAuthLogin is called from the UI (e.g. user closed the browser
+// tab and wants to retry without waiting for the timeout).
 func (a *App) StartOAuthLogin() error {
-	tr, err := oauth.Login(a.ctx, a.endpoint)
+	a.loginMu.Lock()
+	if a.loginCancel != nil {
+		a.loginCancel()
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.loginCancel = cancel
+	a.loginMu.Unlock()
+	defer func() {
+		a.loginMu.Lock()
+		if a.loginCancel != nil {
+			a.loginCancel = nil
+		}
+		a.loginMu.Unlock()
+		cancel()
+	}()
+
+	tr, err := oauth.Login(ctx, a.endpoint)
 	if err != nil {
 		return err
 	}
@@ -47,6 +66,19 @@ func (a *App) StartOAuthLogin() error {
 		return fmt.Errorf("verify: %w", err)
 	}
 	return nil
+}
+
+// CancelOAuthLogin aborts an in-flight StartOAuthLogin. No-op if no
+// login is running. The pending StartOAuthLogin call returns
+// context.Canceled so the UI can re-enable the Sign-in button without
+// waiting for the 5-minute timeout.
+func (a *App) CancelOAuthLogin() {
+	a.loginMu.Lock()
+	defer a.loginMu.Unlock()
+	if a.loginCancel != nil {
+		a.loginCancel()
+		a.loginCancel = nil
+	}
 }
 
 // SignOut stops any running sync and removes the stored session.

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"sync"
 
 	"github.com/selfbase-dev/s2-sync/internal/service"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,6 +16,9 @@ type App struct {
 	ctx      context.Context
 	svc      *service.SyncService
 	endpoint string
+
+	loginMu     sync.Mutex
+	loginCancel context.CancelFunc
 }
 
 // NewApp constructs the App with an endpoint read from the S2_ENDPOINT
