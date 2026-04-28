@@ -11,7 +11,7 @@ import (
 
 // PollChanges fetches change events after the given cursor.
 func (c *Client) PollChanges(cursor string) (*types.ChangesResponse, error) {
-	reqURL := c.url("/api/changes")
+	reqURL := c.url("/api/v1/changes")
 	if cursor != "" {
 		reqURL += "?after=" + neturl.QueryEscape(cursor)
 	}
@@ -43,7 +43,7 @@ func (c *Client) PollChanges(cursor string) (*types.ChangesResponse, error) {
 
 // LatestCursor fetches the latest cursor without consuming events.
 func (c *Client) LatestCursor() (string, error) {
-	req, err := http.NewRequestWithContext(c.reqContext(), "GET", c.url("/api/changes/latest"), nil)
+	req, err := http.NewRequestWithContext(c.reqContext(), "GET", c.url("/api/v1/changes/latest"), nil)
 	if err != nil {
 		return "", err
 	}

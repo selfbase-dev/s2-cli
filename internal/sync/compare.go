@@ -47,10 +47,10 @@ func Compare(
 		action := classify(l, hasLocal, hasRemote, a, hasArchive)
 		if action != types.NoOp {
 			// Populate RevisionID so executor.executePull can use the
-			// race-free /api/revisions/:id fetch path when it is available.
+			// race-free /api/v1/revisions/:id fetch path when it is available.
 			// Only the snapshot-backed caller sets RemoteFile.RevisionID;
 			// the legacy ListAllRecursive path leaves it empty and the
-			// executor falls back to /api/files/:path.
+			// executor falls back to /api/v1/files/:path.
 			plans = append(plans, types.SyncPlan{
 				Path:       path,
 				Action:     action,

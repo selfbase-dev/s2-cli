@@ -245,13 +245,13 @@ func (c *Client) Delete(path string) (*types.DeleteResult, error) {
 	return result, nil
 }
 
-// ErrMoveConflict is returned when POST /api/file-moves returns 409
+// ErrMoveConflict is returned when POST /api/v1/file-moves returns 409
 // (destination already exists or cycle detected). Callers should treat
 // this as SkipCaseConflict per the collision policy — do NOT fall back to
 // delete+push, which is not atomic and can lose data.
 var ErrMoveConflict = fmt.Errorf("move conflict: destination exists or cycle")
 
-// Move moves or renames a file/directory via POST /api/file-moves/{src}.
+// Move moves or renames a file/directory via POST /api/v1/file-moves/{src}.
 // On 409 the returned error wraps ErrMoveConflict so callers can detect
 // the collision case without string-matching.
 //
@@ -268,7 +268,7 @@ func (c *Client) Move(srcPath, dstPath string) (*types.MoveResult, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(c.reqContext(), "POST", c.endpoint+"/api/file-moves/"+srcPath, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(c.reqContext(), "POST", c.endpoint+"/api/v1/file-moves/"+srcPath, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

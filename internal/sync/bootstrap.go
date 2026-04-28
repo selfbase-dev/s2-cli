@@ -1,7 +1,7 @@
 // bootstrap.go — Large subtree bootstrap protocol (ADR 0046).
 //
 // When a scope root contains more items than the server's snapshot cap
-// (~100k), GET /api/snapshot returns 413 (ErrSubtreeCapExceeded).
+// (~100k), GET /api/v1/snapshot returns 413 (ErrSubtreeCapExceeded).
 // The bootstrap protocol handles this by:
 //
 //  1. Pinning S0 via LatestCursor before any listing work begins.

@@ -8,7 +8,7 @@ import (
 	"github.com/selfbase-dev/s2-sync/internal/types"
 )
 
-// SnapshotToRemoteFiles projects /api/snapshot items into the file-centric
+// SnapshotToRemoteFiles projects /api/v1/snapshot items into the file-centric
 // map used by Compare / CompareIncremental. Directory items (Type=="dir")
 // are dropped — empty dirs are reconstructed implicitly by os.MkdirAll
 // when pulling files into them (ADR 0040 §その他 mkdir).
