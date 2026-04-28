@@ -12,13 +12,13 @@ import (
 	"github.com/selfbase-dev/s2-sync/internal/types"
 )
 
-// fakeSnapshotServer builds an httptest.Server whose /api/snapshot
+// fakeSnapshotServer builds an httptest.Server whose /api/v1/snapshot
 // endpoint serves predetermined SnapshotResponse payloads keyed by the
 // `?path=` query (empty string = scope root).
 func fakeSnapshotServer(t *testing.T, responses map[string]types.SnapshotResponse) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/snapshot" {
+		if r.URL.Path != "/api/v1/snapshot" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 			http.NotFound(w, r)
 			return
@@ -35,18 +35,18 @@ func fakeSnapshotServer(t *testing.T, responses map[string]types.SnapshotRespons
 }
 
 // fakeBootstrapServer builds a mock that supports the full Bootstrap
-// protocol: /api/changes/latest (pin S0), /api/snapshot (fetch), and
-// /api/changes?after= (converge with empty changes).
+// protocol: /api/v1/changes/latest (pin S0), /api/v1/snapshot (fetch), and
+// /api/v1/changes?after= (converge with empty changes).
 func fakeBootstrapServer(t *testing.T, snapshot types.SnapshotResponse, latestCursor string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/changes/latest":
+		case "/api/v1/changes/latest":
 			_ = json.NewEncoder(w).Encode(types.LatestCursorResponse{Cursor: latestCursor})
-		case "/api/snapshot":
+		case "/api/v1/snapshot":
 			_ = json.NewEncoder(w).Encode(snapshot)
-		case "/api/changes":
+		case "/api/v1/changes":
 			_ = json.NewEncoder(w).Encode(types.ChangesResponse{})
 		default:
 			t.Errorf("unexpected path %q", r.URL.Path)
@@ -178,7 +178,7 @@ func TestHandleIncrementalDirEvents_MoveInScope(t *testing.T) {
 
 // TestHandleIncrementalDirEvents_PutSubtreeSnapshot exercises ADR 0040
 // cases #7/#11: scope-external → internal move / restore_trash of a
-// subtree triggers /api/snapshot?path=X. The outcome carries the
+// subtree triggers /api/v1/snapshot?path=X. The outcome carries the
 // snapshot response and SubtreeComparePlans (called AFTER the caller's
 // re-walk) produces the file-level plans.
 func TestHandleIncrementalDirEvents_PutSubtreeSnapshot(t *testing.T) {
@@ -319,7 +319,7 @@ func TestHandleIncrementalDirEvents_PutScopeRootClearsStalePlans(t *testing.T) {
 }
 
 // TestHandleIncrementalDirEvents_PutSubtree413Fallback exercises the
-// 413 fallback path: /api/snapshot returns 413, FetchRemoteMap falls
+// 413 fallback path: /api/v1/snapshot returns 413, FetchRemoteMap falls
 // back to ListDir recursive descent. No cursor update for subtree.
 func TestHandleIncrementalDirEvents_PutSubtree413Fallback(t *testing.T) {
 	dir := t.TempDir()
@@ -331,7 +331,7 @@ func TestHandleIncrementalDirEvents_PutSubtree413Fallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.URL.Path == "/api/snapshot":
+		case r.URL.Path == "/api/v1/snapshot":
 			w.WriteHeader(413)
 		case strings.HasSuffix(r.URL.Path, "/vacation/"):
 			_ = json.NewEncoder(w).Encode(types.ListResponse{
@@ -379,7 +379,7 @@ func TestHandleIncrementalDirEvents_PutSubtree413Fallback(t *testing.T) {
 func TestHandleIncrementalDirEvents_PutSubtree413Then404(t *testing.T) {
 	dir := t.TempDir()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/snapshot" {
+		if r.URL.Path == "/api/v1/snapshot" {
 			w.WriteHeader(413)
 			return
 		}

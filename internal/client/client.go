@@ -105,7 +105,7 @@ func (c *Client) url(path string) string {
 }
 
 func (c *Client) filesURL(path string) string {
-	return c.endpoint + "/api/files/" + path
+	return c.endpoint + "/api/v1/files/" + path
 }
 
 func checkStatus(resp *http.Response) error {
@@ -135,7 +135,7 @@ func readErrorBody(resp *http.Response) string {
 
 // Me returns the auth context for the current token.
 func (c *Client) Me() (*types.MeTokenResponse, error) {
-	req, err := http.NewRequestWithContext(c.reqContext(), "GET", c.url("/api/me"), nil)
+	req, err := http.NewRequestWithContext(c.reqContext(), "GET", c.url("/api/v1/me"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (c *Client) Me() (*types.MeTokenResponse, error) {
 
 	var me types.MeTokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
-		return nil, fmt.Errorf("failed to parse /api/me response: %w", err)
+		return nil, fmt.Errorf("failed to parse /api/v1/me response: %w", err)
 	}
 	return &me, nil
 }

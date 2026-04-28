@@ -104,11 +104,11 @@ func TestFormatETag(t *testing.T) {
 	}
 }
 
-// --- /api/me ---
+// --- /api/v1/me ---
 
 func TestMe_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/me": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/me": func(w http.ResponseWriter, r *http.Request) {
 			requireAuth(t, r, "s2_testtoken")
 			jsonResponse(w, 200, map[string]any{
 				"type": "token", "user_id": "user_1", "token_id": "tok_1",
@@ -136,7 +136,7 @@ func TestMe_Success(t *testing.T) {
 
 func TestMe_Unauthorized(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/me": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/me": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(401)
 		},
 	})
@@ -148,11 +148,11 @@ func TestMe_Unauthorized(t *testing.T) {
 	}
 }
 
-// --- /api/files (list) ---
+// --- /api/v1/files (list) ---
 
 func TestListDir_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			size := int64(1024)
 			jsonResponse(w, 200, map[string]any{
 				"items": []map[string]any{
@@ -182,7 +182,7 @@ func TestListDir_Success(t *testing.T) {
 func TestListDir_AddsTrailingSlash(t *testing.T) {
 	var gotPath string
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
 			jsonResponse(w, 200, map[string]any{"items": []any{}})
 		},
@@ -200,7 +200,7 @@ func TestListDir_AddsTrailingSlash(t *testing.T) {
 
 func TestListAllRecursive_404_ReturnsEmpty(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(404)
 		},
 	})
@@ -215,11 +215,11 @@ func TestListAllRecursive_404_ReturnsEmpty(t *testing.T) {
 	}
 }
 
-// --- /api/files (download) ---
+// --- /api/v1/files (download) ---
 
 func TestDownload_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("ETag", `"5"`)
 			w.Header().Set("Content-Length", "13")
 			w.Header().Set("Content-Type", "text/plain")
@@ -248,7 +248,7 @@ func TestDownload_Success(t *testing.T) {
 
 func TestDownload_NotFound(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(404)
 		},
 	})
@@ -260,11 +260,11 @@ func TestDownload_NotFound(t *testing.T) {
 	}
 }
 
-// --- /api/files (upload) ---
+// --- /api/v1/files (upload) ---
 
 func TestUpload_IfMatch_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			if got := r.Header.Get("If-Match"); got != `"3"` {
 				t.Errorf("If-Match = %q, want %q", got, `"3"`)
 			}
@@ -286,7 +286,7 @@ func TestUpload_IfMatch_Success(t *testing.T) {
 
 func TestUpload_SeqInResponse(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, 201, map[string]any{
 				"id": "n1", "name": "test.txt", "size": 5, "hash": "abc", "content_version": 1,
 				"seq": 42,
@@ -309,7 +309,7 @@ func TestUpload_SeqInResponse(t *testing.T) {
 
 func TestUpload_SeqAbsentInResponse(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, 201, map[string]any{
 				"id": "n1", "name": "test.txt", "size": 5, "hash": "abc", "content_version": 1,
 			})
@@ -328,7 +328,7 @@ func TestUpload_SeqAbsentInResponse(t *testing.T) {
 
 func TestUpload_IfNoneMatch_CreateOnly(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			if got := r.Header.Get("If-None-Match"); got != "*" {
 				t.Errorf("If-None-Match = %q, want %q", got, "*")
 			}
@@ -347,7 +347,7 @@ func TestUpload_IfNoneMatch_CreateOnly(t *testing.T) {
 
 func TestUpload_ForceOverwrite_NoConditionalHeaders(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("If-Match") != "" || r.Header.Get("If-None-Match") != "" {
 				t.Errorf("expected no conditional headers, got If-Match=%q If-None-Match=%q",
 					r.Header.Get("If-Match"), r.Header.Get("If-None-Match"))
@@ -367,7 +367,7 @@ func TestUpload_ForceOverwrite_NoConditionalHeaders(t *testing.T) {
 
 func TestUpload_PreconditionFailed(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(412) },
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(412) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.Upload("test.txt", strings.NewReader("x"), "", 3)
@@ -378,7 +378,7 @@ func TestUpload_PreconditionFailed(t *testing.T) {
 
 func TestUpload_Conflict(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(409) },
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(409) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.Upload("test.txt", strings.NewReader("x"), "", 0)
@@ -389,7 +389,7 @@ func TestUpload_Conflict(t *testing.T) {
 
 func TestUpload_StorageLimitExceeded(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"PUT /api/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(413) },
+		"PUT /api/v1/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(413) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.Upload("test.txt", strings.NewReader("x"), "", -1)
@@ -398,11 +398,11 @@ func TestUpload_StorageLimitExceeded(t *testing.T) {
 	}
 }
 
-// --- /api/files (delete) ---
+// --- /api/v1/files (delete) ---
 
 func TestDelete_Success_204(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"DELETE /api/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) },
+		"DELETE /api/v1/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	result, err := c.Delete("test.txt")
@@ -416,7 +416,7 @@ func TestDelete_Success_204(t *testing.T) {
 
 func TestDelete_Success_WithSeq(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"DELETE /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"DELETE /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, 200, map[string]any{"seq": 55})
 		},
 	})
@@ -435,7 +435,7 @@ func TestDelete_Success_WithSeq(t *testing.T) {
 
 func TestDelete_NotFound(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"DELETE /api/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) },
+		"DELETE /api/v1/files/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.Delete("missing.txt")
@@ -444,11 +444,11 @@ func TestDelete_NotFound(t *testing.T) {
 	}
 }
 
-// --- /api/files (head) ---
+// --- /api/v1/files (head) ---
 
 func TestHeadFile_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"HEAD /api/files/": func(w http.ResponseWriter, r *http.Request) {
+		"HEAD /api/v1/files/": func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("ETag", `"7"`)
 			w.Header().Set("Content-Length", "2048")
 			w.WriteHeader(200)
@@ -467,11 +467,11 @@ func TestHeadFile_Success(t *testing.T) {
 	}
 }
 
-// --- /api/changes ---
+// --- /api/v1/changes ---
 
 func TestPollChanges_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/changes": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/changes": func(w http.ResponseWriter, r *http.Request) {
 			after := r.URL.Query().Get("after")
 			if after != "cursor_abc" {
 				t.Errorf("after = %q, want %q", after, "cursor_abc")
@@ -507,7 +507,7 @@ func TestPollChanges_Success(t *testing.T) {
 
 func TestPollChanges_CursorGone(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/changes": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(410) },
+		"GET /api/v1/changes": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(410) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.PollChanges("old_cursor")
@@ -519,7 +519,7 @@ func TestPollChanges_CursorGone(t *testing.T) {
 func TestPollChanges_NoCursor(t *testing.T) {
 	var gotQuery string
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/changes": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/changes": func(w http.ResponseWriter, r *http.Request) {
 			gotQuery = r.URL.RawQuery
 			jsonResponse(w, 200, map[string]any{
 				"changes": []any{}, "next_cursor": "cursor_init", "resync_required": false,
@@ -537,11 +537,11 @@ func TestPollChanges_NoCursor(t *testing.T) {
 	}
 }
 
-// --- /api/changes/latest ---
+// --- /api/v1/changes/latest ---
 
 func TestLatestCursor_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/changes/latest": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/changes/latest": func(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, 200, map[string]string{"cursor": "cursor_xyz"})
 		},
 	})
@@ -560,7 +560,7 @@ func TestLatestCursor_Success(t *testing.T) {
 // generic errors instead of sentinel errors.
 func TestLatestCursor_Unauthorized(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/changes/latest": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/changes/latest": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(401)
 		},
 	})
@@ -573,7 +573,7 @@ func TestLatestCursor_Unauthorized(t *testing.T) {
 
 func TestLatestCursor_Forbidden(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/changes/latest": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/changes/latest": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(403)
 		},
 	})
@@ -590,7 +590,7 @@ func TestChunkedUpload_FullFlow(t *testing.T) {
 	var steps []string
 
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"POST /api/uploads": func(w http.ResponseWriter, r *http.Request) {
+		"POST /api/v1/uploads": func(w http.ResponseWriter, r *http.Request) {
 			steps = append(steps, "create")
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
@@ -602,11 +602,11 @@ func TestChunkedUpload_FullFlow(t *testing.T) {
 				"chunkSize": 4194304, "expiresAt": "2026-04-10T00:00:00Z",
 			})
 		},
-		"PUT /api/uploads/": func(w http.ResponseWriter, r *http.Request) {
+		"PUT /api/v1/uploads/": func(w http.ResponseWriter, r *http.Request) {
 			steps = append(steps, "chunk")
 			w.WriteHeader(200)
 		},
-		"POST /api/uploads/": func(w http.ResponseWriter, r *http.Request) {
+		"POST /api/v1/uploads/": func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/complete") {
 				steps = append(steps, "complete")
 				jsonResponse(w, 200, map[string]any{
@@ -648,7 +648,7 @@ func TestChunkedUpload_FullFlow(t *testing.T) {
 
 func TestCompleteUpload_SeqInResponse(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"POST /api/uploads/": func(w http.ResponseWriter, r *http.Request) {
+		"POST /api/v1/uploads/": func(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, 200, map[string]any{
 				"id": "n1", "name": "big.bin", "size": 1000, "hash": "abc", "content_version": int64(1),
 				"seq": 99,
@@ -671,11 +671,11 @@ func TestCompleteUpload_SeqInResponse(t *testing.T) {
 
 // --- Move ---
 
-// --- /api/tokens ---
+// --- /api/v1/tokens ---
 
 func TestCreateToken_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"POST /api/tokens": func(w http.ResponseWriter, r *http.Request) {
+		"POST /api/v1/tokens": func(w http.ResponseWriter, r *http.Request) {
 			requireAuth(t, r, "s2_parent")
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
@@ -716,7 +716,7 @@ func TestCreateToken_Success(t *testing.T) {
 
 func TestCreateToken_Forbidden(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"POST /api/tokens": func(w http.ResponseWriter, r *http.Request) {
+		"POST /api/v1/tokens": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(403)
 		},
 	})
@@ -727,11 +727,11 @@ func TestCreateToken_Forbidden(t *testing.T) {
 	}
 }
 
-// --- /api/file-moves ---
+// --- /api/v1/file-moves ---
 
 func TestMove_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"POST /api/file-moves/": func(w http.ResponseWriter, r *http.Request) {
+		"POST /api/v1/file-moves/": func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["destination"] != "new/path.txt" {
@@ -754,11 +754,11 @@ func TestMove_Success(t *testing.T) {
 	}
 }
 
-// --- /api/snapshot (ADR 0039) ---
+// --- /api/v1/snapshot ---
 
 func TestSnapshot_ScopeRoot(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/snapshot": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/snapshot": func(w http.ResponseWriter, r *http.Request) {
 			requireAuth(t, r, "s2_test")
 			if r.URL.RawQuery != "" {
 				t.Errorf("expected empty query, got %q", r.URL.RawQuery)
@@ -811,7 +811,7 @@ func TestSnapshot_ScopeRoot(t *testing.T) {
 func TestSnapshot_WithPath(t *testing.T) {
 	var capturedQuery string
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/snapshot": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/snapshot": func(w http.ResponseWriter, r *http.Request) {
 			capturedQuery = r.URL.RawQuery
 			jsonResponse(w, 200, map[string]any{
 				"items":  []any{},
@@ -831,7 +831,7 @@ func TestSnapshot_WithPath(t *testing.T) {
 
 func TestSnapshot_NotFound(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/snapshot": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) },
+		"GET /api/v1/snapshot": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.Snapshot("/missing")
@@ -842,7 +842,7 @@ func TestSnapshot_NotFound(t *testing.T) {
 
 func TestSnapshot_SubtreeCapExceeded(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/snapshot": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/snapshot": func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(413)
 			w.Write([]byte(`{"error":{"code":"subtree_cap_exceeded","message":"too big"}}`))
@@ -857,7 +857,7 @@ func TestSnapshot_SubtreeCapExceeded(t *testing.T) {
 
 func TestSnapshot_Unauthorized(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/snapshot": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(401) },
+		"GET /api/v1/snapshot": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(401) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.Snapshot("")
@@ -866,13 +866,13 @@ func TestSnapshot_Unauthorized(t *testing.T) {
 	}
 }
 
-// --- /api/revisions/:id (GET, ADR 0040) ---
+// --- /api/v1/revisions/:id (GET) ---
 
 func TestDownloadRevision_Success(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/revisions/": func(w http.ResponseWriter, r *http.Request) {
+		"GET /api/v1/revisions/": func(w http.ResponseWriter, r *http.Request) {
 			requireAuth(t, r, "s2_test")
-			if r.URL.Path != "/api/revisions/rev_42" {
+			if r.URL.Path != "/api/v1/revisions/rev_42" {
 				t.Errorf("path = %q", r.URL.Path)
 			}
 			w.Header().Set("Content-Type", "text/plain")
@@ -906,7 +906,7 @@ func TestDownloadRevision_Success(t *testing.T) {
 
 func TestDownloadRevision_NotFound(t *testing.T) {
 	srv := newTestServer(t, map[string]http.HandlerFunc{
-		"GET /api/revisions/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) },
+		"GET /api/v1/revisions/": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) },
 	})
 	c := New(srv.URL, auth.NewStaticSource("s2_test"))
 	_, err := c.DownloadRevision("rev_missing")

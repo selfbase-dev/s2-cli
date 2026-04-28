@@ -65,7 +65,7 @@ Schema mismatches or corruption are quarantined to `.corrupt.<ts>/` and a fresh 
 | Scenario                                        | Mechanism                                                                                       |
 |-------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | Concurrent push overwrites                      | `If-Match: <archive content_version>` CAS. 412/409 → conflict                                   |
-| Remote changes again mid-pull                   | Fetch by pinned `revision_id` (`/api/revisions/:id`); fall back to path if unavailable          |
+| Remote changes again mid-pull                   | Fetch by pinned `revision_id` (`/api/v1/revisions/:id`); fall back to path if unavailable          |
 | Re-pulling our own push                         | Push seq recorded in `pushed_seqs`, filtered out of poll results                                |
 | Local changes mid-pull                          | Local hash checked before/after the `.s2tmp` write; mismatch → abort and convert to conflict    |
 | Crash mid-write                                 | `.s2tmp` + `os.Rename` for atomic file swap; state changes inside SQLite tx                     |

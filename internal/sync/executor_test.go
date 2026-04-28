@@ -31,10 +31,10 @@ func TestExecute_Push_RemoteKeyJoin(t *testing.T) {
 		planPath string
 		wantURL  string
 	}{
-		{"no trailing slash, top-level file", "agents", "README.md", "/api/files/agents/README.md"},
-		{"no trailing slash, nested file", "agents", "agents/MEMORY.md", "/api/files/agents/agents/MEMORY.md"},
-		{"trailing slash", "agents/", "README.md", "/api/files/agents/README.md"},
-		{"empty prefix", "", "README.md", "/api/files/README.md"},
+		{"no trailing slash, top-level file", "agents", "README.md", "/api/v1/files/agents/README.md"},
+		{"no trailing slash, nested file", "agents", "agents/MEMORY.md", "/api/v1/files/agents/agents/MEMORY.md"},
+		{"trailing slash", "agents/", "README.md", "/api/v1/files/agents/README.md"},
+		{"empty prefix", "", "README.md", "/api/v1/files/README.md"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -253,7 +253,7 @@ func TestExecute_DeleteRemote(t *testing.T) {
 func TestExecute_Move_Success(t *testing.T) {
 	var gotSrc, gotDest string
 	_, c := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && r.URL.Path == "/api/file-moves/prefix/file.txt" {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/file-moves/prefix/file.txt" {
 			gotSrc = r.URL.Path
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
@@ -283,8 +283,8 @@ func TestExecute_Move_Success(t *testing.T) {
 	if result.Moved != 1 {
 		t.Errorf("moved = %d, want 1", result.Moved)
 	}
-	if gotSrc != "/api/file-moves/prefix/file.txt" {
-		t.Errorf("src path = %q, want /api/file-moves/prefix/file.txt", gotSrc)
+	if gotSrc != "/api/v1/file-moves/prefix/file.txt" {
+		t.Errorf("src path = %q, want /api/v1/file-moves/prefix/file.txt", gotSrc)
 	}
 	if gotDest != "prefix/File.txt" {
 		t.Errorf("dest = %q, want prefix/File.txt", gotDest)
@@ -551,7 +551,7 @@ func TestExecute_Conflict_Remote404_PushesLocal(t *testing.T) {
 
 func TestExecute_Pull_RevisionPruned_FallsBackToPath(t *testing.T) {
 	_, c := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/revisions/rev-pruned" {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/revisions/rev-pruned" {
 			w.WriteHeader(404)
 			return
 		}
@@ -626,7 +626,7 @@ func TestExecute_Pull_RevisionPinned_RecordsRevisionID(t *testing.T) {
 
 func TestExecute_Conflict_RevisionPruned_FallsBack(t *testing.T) {
 	_, c := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/revisions/rev-old" {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/revisions/rev-old" {
 			w.WriteHeader(404)
 			return
 		}

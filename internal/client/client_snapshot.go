@@ -10,9 +10,9 @@ import (
 	"github.com/selfbase-dev/s2-sync/internal/types"
 )
 
-// Snapshot fetches an atomic subtree snapshot from GET /api/snapshot.
+// Snapshot fetches an atomic subtree snapshot from GET /api/v1/snapshot.
 func (c *Client) Snapshot(path string) (*types.SnapshotResponse, error) {
-	reqURL := c.url("/api/snapshot")
+	reqURL := c.url("/api/v1/snapshot")
 	if path != "" && path != "/" {
 		reqURL += "?path=" + neturl.QueryEscape(path)
 	}
@@ -47,7 +47,7 @@ func (c *Client) Snapshot(path string) (*types.SnapshotResponse, error) {
 
 // DownloadRevision downloads file content by revision id.
 func (c *Client) DownloadRevision(revisionID string) (*DownloadResult, error) {
-	req, err := http.NewRequestWithContext(c.reqContext(), "GET", c.url("/api/revisions/"+neturl.PathEscape(revisionID)), nil)
+	req, err := http.NewRequestWithContext(c.reqContext(), "GET", c.url("/api/v1/revisions/"+neturl.PathEscape(revisionID)), nil)
 	if err != nil {
 		return nil, err
 	}

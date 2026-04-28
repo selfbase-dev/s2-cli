@@ -2,7 +2,7 @@ package types
 
 // --- API request types ---
 
-// CreateTokenRequest for POST /api/tokens.
+// CreateTokenRequest for POST /api/v1/tokens.
 type CreateTokenRequest struct {
 	Name        string       `json:"name"`
 	BasePath    string       `json:"base_path,omitempty"`
@@ -10,7 +10,7 @@ type CreateTokenRequest struct {
 	AccessPaths []AccessPath `json:"access_paths"`
 }
 
-// CreateTokenResponse from POST /api/tokens.
+// CreateTokenResponse from POST /api/v1/tokens.
 type CreateTokenResponse struct {
 	Token struct {
 		ID          string       `json:"id"`
@@ -27,7 +27,7 @@ type CreateTokenResponse struct {
 
 // --- API response types (matching OpenAPI spec) ---
 
-// MeTokenResponse from GET /api/me (token auth).
+// MeTokenResponse from GET /api/v1/me (token auth).
 type MeTokenResponse struct {
 	Type        string       `json:"type"`
 	UserID      string       `json:"user_id"`
@@ -44,7 +44,7 @@ type AccessPath struct {
 	CanWrite bool   `json:"can_write"`
 }
 
-// FileItem from directory listing (GET /api/files/{path}/).
+// FileItem from directory listing (GET /api/v1/files/{path}/).
 type FileItem struct {
 	ID             string  `json:"id"`
 	Name           string  `json:"name"`
@@ -57,12 +57,12 @@ type FileItem struct {
 	ContentType    *string `json:"content_type,omitempty"`
 }
 
-// ListResponse from GET /api/files/{path}/.
+// ListResponse from GET /api/v1/files/{path}/.
 type ListResponse struct {
 	Items []FileItem `json:"items"`
 }
 
-// UploadResult from PUT /api/files/{path} or POST /api/uploads/{id}/complete.
+// UploadResult from PUT /api/v1/files/{path} or POST /api/v1/uploads/{id}/complete.
 type UploadResult struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
@@ -72,12 +72,12 @@ type UploadResult struct {
 	Seq            *int64 `json:"seq"`
 }
 
-// DeleteResult from DELETE /api/files/{path}.
+// DeleteResult from DELETE /api/v1/files/{path}.
 type DeleteResult struct {
 	Seq *int64 `json:"seq"`
 }
 
-// MoveResult from POST /api/file-moves/{path}. Carries the changelog
+// MoveResult from POST /api/v1/file-moves/{path}. Carries the changelog
 // seq (so the client can self-change-filter) and the node's
 // content_version (for archive updates after a case-only rename).
 type MoveResult struct {
@@ -86,7 +86,7 @@ type MoveResult struct {
 	ContentVersion int64  `json:"content_version"`
 }
 
-// ChangeEntry from GET /api/changes.
+// ChangeEntry from GET /api/v1/changes.
 type ChangeEntry struct {
 	Seq            int64  `json:"seq"`
 	TokenID        string `json:"token_id"`
@@ -101,7 +101,7 @@ type ChangeEntry struct {
 	CreatedAt      string `json:"created_at"`
 }
 
-// ChangesResponse from GET /api/changes.
+// ChangesResponse from GET /api/v1/changes.
 type ChangesResponse struct {
 	Changes    []ChangeEntry `json:"changes"`
 	NextCursor string        `json:"next_cursor"`
@@ -109,7 +109,7 @@ type ChangesResponse struct {
 
 // --- Snapshot primitive (ADR 0039) ---
 
-// SnapshotItem is one metadata entry returned by GET /api/snapshot.
+// SnapshotItem is one metadata entry returned by GET /api/v1/snapshot.
 type SnapshotItem struct {
 	Path           string `json:"path"`
 	Type           string `json:"type"`
@@ -120,18 +120,18 @@ type SnapshotItem struct {
 	ContentType    string `json:"content_type"`
 }
 
-// SnapshotResponse from GET /api/snapshot[?path=X].
+// SnapshotResponse from GET /api/v1/snapshot[?path=X].
 type SnapshotResponse struct {
 	Items  []SnapshotItem `json:"items"`
 	Cursor string         `json:"cursor"`
 }
 
-// LatestCursorResponse from GET /api/changes/latest.
+// LatestCursorResponse from GET /api/v1/changes/latest.
 type LatestCursorResponse struct {
 	Cursor string `json:"cursor"`
 }
 
-// UploadSession from POST /api/uploads.
+// UploadSession from POST /api/v1/uploads.
 type UploadSession struct {
 	SessionID string `json:"sessionId"`
 	NodeID    string `json:"nodeId"`
