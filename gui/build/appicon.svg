@@ -12,5 +12,5 @@
     <path d="M 859.7 605.2 A 360 360 0 0 1 164.3 605.2" marker-end="url(#ah)"/>
   </g>
 
-  <text x="512" y="690" font-family="Avenir Next, Helvetica, sans-serif" font-weight="900" font-size="500" text-anchor="middle" fill="#425440">2</text>
+  <text x="512" y="660" font-family="Avenir Next, Helvetica, sans-serif" font-weight="900" font-size="380" text-anchor="middle" fill="#425440" letter-spacing="-14">S2</text>
 </svg>
